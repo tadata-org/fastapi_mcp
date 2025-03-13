@@ -6,7 +6,7 @@ This module provides functionality for creating MCP tools from FastAPI endpoints
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import FastAPI
@@ -149,11 +149,15 @@ def create_mcp_tools_from_openapi(
             if method not in ["get", "post", "put", "delete", "patch"]:
                 continue
 
+            # Skip registering tools we have tagged with 'exclude_from_mcp'
+            if 'exclude_from_mcp' in operation.get("tags", []):
+                continue
+
             # Get operation metadata
             operation_id = operation.get("operationId")
             if not operation_id:
                 continue
-
+            
             # Create MCP tool for this operation
             create_http_tool(
                 mcp_server=mcp_server,
