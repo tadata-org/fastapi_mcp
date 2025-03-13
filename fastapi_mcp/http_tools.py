@@ -149,8 +149,8 @@ def create_mcp_tools_from_openapi(
             if method not in ["get", "post", "put", "delete", "patch"]:
                 continue
 
-            # Skip registering tools we have tagged with 'exclude_from_mcp'
-            if 'exclude_from_mcp' in operation.get("tags", []):
+            # Skip registering tools unless they are explicitly allowed
+            if 'include_in_mcp' not in operation.get("tags", []) and  "handle_mcp_connection_mcp_get" not in operation.get("operationId", ""):
                 continue
 
             # Get operation metadata
