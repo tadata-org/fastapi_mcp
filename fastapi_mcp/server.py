@@ -14,11 +14,14 @@ from starlette.requests import Request
 from .http_tools import create_mcp_tools_from_openapi
 
 
+create_tools_by_default = True
+
 def create_mcp_server(
     app: FastAPI,
     name: Optional[str] = None,
     description: Optional[str] = None,
     capabilities: Optional[Dict[str, Any]] = None,
+    create_tools_by_default: Optional[bool] = True
 ) -> FastMCP:
     """
     Create an MCP server from a FastAPI app.
@@ -28,6 +31,9 @@ def create_mcp_server(
         name: Name for the MCP server (defaults to app.title)
         description: Description for the MCP server (defaults to app.description)
         capabilities: Optional capabilities for the MCP server
+        create_tools_by_default: Optional bool value  use to indicate if we should
+            consider 'include_in_mcp' when creating tools from FastAPI paths
+            
 
     Returns:
         The created FastMCP instance
@@ -56,6 +62,7 @@ def mount_mcp_server(
     base_url: Optional[str] = None,
     describe_all_responses: bool = False,
     describe_full_response_schema: bool = False,
+    create_tools_by_default: bool = True
 ) -> None:
     """
     Mount an MCP server to a FastAPI app.
@@ -99,6 +106,7 @@ def mount_mcp_server(
             base_url,
             describe_all_responses=describe_all_responses,
             describe_full_response_schema=describe_full_response_schema,
+            create_tools_by_default=create_tools_by_default
         )
 
 
@@ -112,6 +120,7 @@ def add_mcp_server(
     base_url: Optional[str] = None,
     describe_all_responses: bool = False,
     describe_full_response_schema: bool = False,
+    create_tools_by_default: bool = True
 ) -> FastMCP:
     """
     Add an MCP server to a FastAPI app.
@@ -142,6 +151,7 @@ def add_mcp_server(
         base_url,
         describe_all_responses=describe_all_responses,
         describe_full_response_schema=describe_full_response_schema,
+        create_tools_by_default=create_tools_by_default
     )
 
     return mcp_server

@@ -32,7 +32,7 @@ def complex_app():
         version="0.1.0",
     )
 
-    @app.get("/items/", response_model=List[Item], tags=["items", "include_in_mcp"])
+    @app.get("/items/", response_model=List[Item], tags=["items"])
     async def list_items(
         skip: int = Query(0, description="Number of items to skip"),
         limit: int = Query(10, description="Max number of items to return"),
@@ -41,7 +41,7 @@ def complex_app():
         """List all items with pagination and sorting options."""
         return []
 
-    @app.get("/items/{item_id}", response_model=Item, tags=["items", "include_in_mcp"])
+    @app.get("/items/{item_id}", response_model=Item, tags=["items"])
     async def read_item(
         item_id: int = Path(..., description="The ID of the item to retrieve"),
         include_details: bool = Query(False, description="Include additional details"),
@@ -49,12 +49,12 @@ def complex_app():
         """Get a specific item by its ID with optional details."""
         return {"id": item_id, "name": "Test Item", "price": 10.0}
 
-    @app.post("/items/", response_model=Item, tags=["items", "include_in_mcp"], status_code=201)
+    @app.post("/items/", response_model=Item, tags=["items"], status_code=201)
     async def create_item(item: Item = Body(..., description="The item to create")):
         """Create a new item in the database."""
         return item
 
-    @app.put("/items/{item_id}", response_model=Item, tags=["items", "include_in_mcp"])
+    @app.put("/items/{item_id}", response_model=Item, tags=["items"])
     async def update_item(
         item_id: int = Path(..., description="The ID of the item to update"),
         item: Item = Body(..., description="The updated item data"),
@@ -63,7 +63,7 @@ def complex_app():
         item.id = item_id
         return item
 
-    @app.delete("/items/{item_id}", tags=["items", "include_in_mcp"])
+    @app.delete("/items/{item_id}", tags=["items"])
     async def delete_item(item_id: int = Path(..., description="The ID of the item to delete")):
         """Delete an item from the database."""
         return {"message": "Item deleted successfully"}

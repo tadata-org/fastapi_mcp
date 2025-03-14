@@ -5,13 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0]
+## [0.2.0]
 
 ### Changed
 
-- Introduced `include_in_mcp` tag - unless this is included in tags for FastAPI paths,
-  we will exclude the paths from being converted into MCP tools. This is introduce
+- Introduced `include_in_mcp` tag- unless this is included in tags for FastAPI paths,
+  we will exclude the paths from being converted into MCP tools. This is to introduce
   opt-in conversion of paths-> tools.
+  - This feature is only enabled when the user sets the 'create_tools_by_default'
+    variable to false when calling `add_mcp_server`
 
 ## [0.1.3]
 

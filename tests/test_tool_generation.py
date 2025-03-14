@@ -124,7 +124,7 @@ def test_tool_generation_basic(sample_app):
 def test_tool_generation_with_exclusions(sample_app_with_tool_exclusions):
     """Test that  only tools tagged with "include_in_mcp"' are registered."""
     # Create MCP server and register tools
-    mcp_server = add_mcp_server(sample_app_with_tool_exclusions, serve_tools=True, base_url="http://localhost:8000")
+    mcp_server = add_mcp_server(sample_app_with_tool_exclusions, serve_tools=True, base_url="http://localhost:8000", create_tools_by_default = False)
 
     # Extract tools for inspection
     tools = mcp_server._tool_manager.list_tools()

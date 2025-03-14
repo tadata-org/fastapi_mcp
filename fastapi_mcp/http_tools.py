@@ -105,6 +105,7 @@ def create_mcp_tools_from_openapi(
     base_url: Optional[str] = None,
     describe_all_responses: bool = False,
     describe_full_response_schema: bool = False,
+    create_tools_by_default: bool = True,
 ) -> None:
     """
     Create MCP tools from a FastAPI app's OpenAPI schema.
@@ -149,10 +150,11 @@ def create_mcp_tools_from_openapi(
             if method not in ["get", "post", "put", "delete", "patch"]:
                 continue
 
+            # If we do not create tools by default,
             # Skip registering tools unless they are explicitly allowed
-            if 'include_in_mcp' not in operation.get("tags", []) and  "handle_mcp_connection_mcp_get" not in operation.get("operationId", ""):
-                continue
-
+            if not create_tools_by_default:
+                if 'include_in_mcp' not in operation.get("tags", []) and "handle_mcp_connection_mcp_get" not in operation.get("operationId", ""):
+                    continue
             # Get operation metadata
             operation_id = operation.get("operationId")
             if not operation_id:
