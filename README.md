@@ -80,7 +80,7 @@ Ex)
         return item
 ```
 
-If `create_tools_by_default` is not set, any paths _without_ the `include_in_mcp` tag will not have a corresponding MCP tool created.
+If `create_tools_by_default` is set to 'false', any paths _without_ the `include_in_mcp` tag will not have a corresponding MCP tool created.
 
 ## Advanced Usage
 
