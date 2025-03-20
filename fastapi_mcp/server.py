@@ -9,7 +9,7 @@ from typing import Dict, Optional, Any
 from fastapi import FastAPI
 from mcp.server.fastmcp import FastMCP
 from mcp.server.sse import SseServerTransport
-from starlette.requests import Request
+from fastapi import Request
 
 from .http_tools import create_mcp_tools_from_openapi
 
