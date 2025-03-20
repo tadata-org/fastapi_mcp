@@ -31,7 +31,7 @@ items_db: dict[int, Item] = {}
 
 
 # Define some endpoints
-@app.get("/items/", response_model=List[Item], tags=["items"])
+@app.get("/items/", response_model=List[Item], tags=["items", "include_in_mcp"])
 async def list_items(skip: int = 0, limit: int = 10):
     """
     List all items in the database.
@@ -41,7 +41,7 @@ async def list_items(skip: int = 0, limit: int = 10):
     return list(items_db.values())[skip : skip + limit]
 
 
-@app.get("/items/{item_id}", response_model=Item, tags=["items"])
+@app.get("/items/{item_id}", response_model=Item, tags=["items", "include_in_mcp"])
 async def read_item(item_id: int):
     """
     Get a specific item by its ID.
@@ -53,7 +53,7 @@ async def read_item(item_id: int):
     return items_db[item_id]
 
 
-@app.post("/items/", response_model=Item, tags=["items"])
+@app.post("/items/", response_model=Item, tags=["items", "include_in_mcp"])
 async def create_item(item: Item):
     """
     Create a new item in the database.
@@ -64,7 +64,7 @@ async def create_item(item: Item):
     return item
 
 
-@app.put("/items/{item_id}", response_model=Item, tags=["items"])
+@app.put("/items/{item_id}", response_model=Item, tags=["items", "include_in_mcp"])
 async def update_item(item_id: int, item: Item):
     """
     Update an existing item.
@@ -79,7 +79,7 @@ async def update_item(item_id: int, item: Item):
     return item
 
 
-@app.delete("/items/{item_id}", tags=["items"])
+@app.delete("/items/{item_id}", tags=["items", "include_in_mcp"])
 async def delete_item(item_id: int):
     """
     Delete an item from the database.
@@ -93,7 +93,7 @@ async def delete_item(item_id: int):
     return {"message": "Item deleted successfully"}
 
 
-@app.get("/items/search/", response_model=List[Item], tags=["search"])
+@app.get("/items/search/", response_model=List[Item], tags=["search", "include_in_mcp"])
 async def search_items(
     q: Optional[str] = Query(None, description="Search query string"),
     min_price: Optional[float] = Query(None, description="Minimum price"),

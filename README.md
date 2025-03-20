@@ -49,6 +49,39 @@ add_mcp_server(
 
 That's it! Your auto-generated MCP server is now available at `https://app.base.url/mcp`.
 
+By default, all registered FastAPI paths will have MCP tools created for them
+
+If you wish to turn on the ability to not have tools created by default, pass
+the `create_tools_by_default = false` flag into your `add_mcp_server` call.
+
+Ex )
+
+```
+add_mcp_server(
+    app,
+    mount_path="/mcp",
+    name="My API MCP",
+    create_tools_by_default = false
+)
+```
+
+Then, for each path you wish to create a tool for, include the following in the path's tags: `include_in_mcp`
+
+Ex)
+
+```
+    @app.post("/items/", response_model=Item, tags=["items", "include_in_mcp"])
+    async def create_item(item: Item):
+        """
+        Create a new item.
+
+        Returns the created item.
+        """
+        return item
+```
+
+If `create_tools_by_default` is set to 'false', any paths _without_ the `include_in_mcp` tag will not have a corresponding MCP tool created.
+
 ## Advanced Usage
 
 FastAPI-MCP provides several ways to customize and control how your MCP server is created and configured. Here are some advanced usage patterns:
