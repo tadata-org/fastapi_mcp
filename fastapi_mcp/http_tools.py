@@ -461,7 +461,7 @@ def create_http_tool(
             required_props.append(param_name)
 
     # Function to dynamically call the API endpoint
-    async def http_tool_function(**kwargs):
+        async def http_tool_function(kwargs: Dict[str, Any] = Field(default_factory=dict)):
         # Prepare URL with path parameters
         url = f"{base_url}{path}"
         for param_name, _ in path_params:
@@ -493,7 +493,7 @@ def create_http_tool(
             elif method.lower() == "put":
                 response = await client.put(url, params=query, headers=headers, json=body)
             elif method.lower() == "delete":
-                response = await client.delete(url, params=query, headers=headers, json=body)
+                response = await client.delete(url, params=query, headers=headers)
             elif method.lower() == "patch":
                 response = await client.patch(url, params=query, headers=headers, json=body)
             else:
@@ -506,11 +506,7 @@ def create_http_tool(
             return response.text
 
     # Create a proper input schema for the tool
-    input_schema = {
-        "type": "object",
-        "properties": properties,
-        "title": f"{operation_id}Arguments",
-    }
+    input_schema = {"type": "object", "properties": properties, "title": f"{operation_id}Arguments"}
 
     if required_props:
         input_schema["required"] = required_props
@@ -590,15 +586,7 @@ def generate_example_from_schema(schema: Dict[str, Any], model_name: Optional[st
         }
     elif model_name == "HTTPValidationError":
         # Create a realistic validation error example
-        return {
-            "detail": [
-                {
-                    "loc": ["body", "name"],
-                    "msg": "field required",
-                    "type": "value_error.missing",
-                }
-            ]
-        }
+        return {"detail": [{"loc": ["body", "name"], "msg": "field required", "type": "value_error.missing"}]}
 
     # Handle different types
     schema_type = schema.get("type")
