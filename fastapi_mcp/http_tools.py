@@ -41,24 +41,17 @@ def resolve_schema_references(
         # Standard OpenAPI references are in the format "#/components/schemas/ModelName"
         if ref_path.startswith("#/components/schemas/"):
             model_name = ref_path.split("/")[-1]
-            if (
-                "components" in openapi_schema
-                and "schemas" in openapi_schema["components"]
-            ):
+            if "components" in openapi_schema and "schemas" in openapi_schema["components"]:
                 if model_name in openapi_schema["components"]["schemas"]:
                     # Replace with the resolved schema
-                    ref_schema = openapi_schema["components"]["schemas"][
-                        model_name
-                    ].copy()
+                    ref_schema = openapi_schema["components"]["schemas"][model_name].copy()
 
                     if top_schema is not None:
                         # Create the $defs key if it doesn't exist
                         if "$defs" not in top_schema:
                             top_schema["$defs"] = {}
 
-                        ref_schema = resolve_schema_references(
-                            ref_schema, openapi_schema, top_schema=top_schema
-                        )
+                        ref_schema = resolve_schema_references(ref_schema, openapi_schema, top_schema=top_schema)
 
                         # Create the definition reference
                         top_schema["$defs"][model_name] = ref_schema
@@ -75,16 +68,12 @@ def resolve_schema_references(
     for key in ["anyOf", "oneOf", "allOf"]:
         if key in schema:
             for index, item in enumerate(schema[key]):
-                item = resolve_schema_references(
-                    item, openapi_schema, top_schema=top_schema
-                )
+                item = resolve_schema_references(item, openapi_schema, top_schema=top_schema)
                 schema[key][index] = item
 
     # Handle array items
     if "type" in schema and schema["type"] == "array" and "items" in schema:
-        schema["items"] = resolve_schema_references(
-            schema["items"], openapi_schema, top_schema=top_schema
-        )
+        schema["items"] = resolve_schema_references(schema["items"], openapi_schema, top_schema=top_schema)
 
     # Handle object properties
     if "properties" in schema:
@@ -263,9 +252,7 @@ def create_http_tool(
         responses_to_include = responses
         if not describe_all_responses and success_response:
             # If we're not describing all responses, only include the success response
-            success_code = next(
-                (code for code in success_codes if str(code) in responses), None
-            )
+            success_code = next((code for code in success_codes if str(code) in responses), None)
             if success_code:
                 responses_to_include = {str(success_code): success_response}
 
@@ -286,9 +273,7 @@ def create_http_tool(
                         response_info += f"\nContent-Type: {content_type}"
 
                         # Resolve any schema references
-                        resolved_schema = resolve_schema_references(
-                            schema, openapi_schema
-                        )
+                        resolved_schema = resolve_schema_references(schema, openapi_schema)
 
                         # Clean the schema for display
                         display_schema = clean_schema_for_display(resolved_schema)
@@ -303,16 +288,10 @@ def create_http_tool(
                                 model_name = ref_path.split("/")[-1]
                                 response_info += f"\nModel: {model_name}"
                                 # Try to get examples from the model
-                                model_examples = extract_model_examples_from_components(
-                                    model_name, openapi_schema
-                                )
+                                model_examples = extract_model_examples_from_components(model_name, openapi_schema)
 
                         # Check if this is an array of items
-                        if (
-                            schema.get("type") == "array"
-                            and "items" in schema
-                            and "$ref" in schema["items"]
-                        ):
+                        if schema.get("type") == "array" and "items" in schema and "$ref" in schema["items"]:
                             items_ref_path = schema["items"]["$ref"]
                             if items_ref_path.startswith("#/components/schemas/"):
                                 items_model_name = items_ref_path.split("/")[-1]
@@ -327,17 +306,13 @@ def create_http_tool(
                         # Otherwise, try to create an example from the response definitions
                         elif "examples" in response_data:
                             # Use examples directly from response definition
-                            for example_key, example_data in response_data[
-                                "examples"
-                            ].items():
+                            for example_key, example_data in response_data["examples"].items():
                                 if "value" in example_data:
                                     example_response = example_data["value"]
                                     break
                         # If content has examples
                         elif "examples" in content_data:
-                            for example_key, example_data in content_data[
-                                "examples"
-                            ].items():
+                            for example_key, example_data in content_data["examples"].items():
                                 if "value" in example_data:
                                     example_response = example_data["value"]
                                     break
@@ -375,9 +350,7 @@ def create_http_tool(
                             response_info += "\n```"
                         # Otherwise generate an example from the schema
                         else:
-                            generated_example = generate_example_from_schema(
-                                display_schema, model_name
-                            )
+                            generated_example = generate_example_from_schema(display_schema, model_name)
                             if generated_example:
                                 response_info += "\n\n**Example Response:**\n```json\n"
                                 response_info += json.dumps(generated_example, indent=2)
@@ -386,13 +359,12 @@ def create_http_tool(
                         # Only include full schema information if requested
                         if describe_full_response_schema:
                             # Format schema information based on its type
-                            if (
-                                display_schema.get("type") == "array"
-                                and "items" in display_schema
-                            ):
+                            if display_schema.get("type") == "array" and "items" in display_schema:
                                 items_schema = display_schema["items"]
 
-                                response_info += "\n\n**Output Schema:** Array of items with the following structure:\n```json\n"
+                                response_info += (
+                                    "\n\n**Output Schema:** Array of items with the following structure:\n```json\n"
+                                )
                                 response_info += json.dumps(items_schema, indent=2)
                                 response_info += "\n```"
                             elif "properties" in display_schema:
@@ -517,21 +489,13 @@ def create_http_tool(
             if method.lower() == "get":
                 response = await client.get(url, params=query, headers=headers)
             elif method.lower() == "post":
-                response = await client.post(
-                    url, params=query, headers=headers, json=body
-                )
+                response = await client.post(url, params=query, headers=headers, json=body)
             elif method.lower() == "put":
-                response = await client.put(
-                    url, params=query, headers=headers, json=body
-                )
+                response = await client.put(url, params=query, headers=headers, json=body)
             elif method.lower() == "delete":
-                response = await client.delete(
-                    url, params=query, headers=headers, json=body
-                )
+                response = await client.delete(url, params=query, headers=headers, json=body)
             elif method.lower() == "patch":
-                response = await client.patch(
-                    url, params=query, headers=headers, json=body
-                )
+                response = await client.patch(url, params=query, headers=headers, json=body)
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
 
@@ -560,9 +524,7 @@ def create_http_tool(
     http_tool_function._input_schema = input_schema  # type: ignore
 
     # Add tool to the MCP server with the enhanced schema
-    tool = mcp_server._tool_manager.add_tool(
-        http_tool_function, name=operation_id, description=tool_description
-    )
+    tool = mcp_server._tool_manager.add_tool(http_tool_function, name=operation_id, description=tool_description)
 
     # Update the tool's parameters to use our custom schema instead of the auto-generated one
     tool.parameters = input_schema
@@ -581,10 +543,7 @@ def extract_model_examples_from_components(
     Returns:
         List of example dictionaries if found, None otherwise
     """
-    if (
-        "components" not in openapi_schema
-        or "schemas" not in openapi_schema["components"]
-    ):
+    if "components" not in openapi_schema or "schemas" not in openapi_schema["components"]:
         return None
 
     if model_name not in openapi_schema["components"]["schemas"]:
@@ -605,9 +564,7 @@ def extract_model_examples_from_components(
     return examples
 
 
-def generate_example_from_schema(
-    schema: Dict[str, Any], model_name: Optional[str] = None
-) -> Any:
+def generate_example_from_schema(schema: Dict[str, Any], model_name: Optional[str] = None) -> Any:
     """
     Generate a simple example response from a JSON schema.
 
