@@ -6,6 +6,7 @@ This module provides functionality for creating MCP tools from FastAPI endpoints
 
 import json
 import logging
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -15,6 +16,13 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
 logger = logging.getLogger("fastapi_mcp")
+
+
+class MCPType(Enum):
+    TOOL = "mcp_tool"
+    RESOURCE = "mcp_resource"
+    SAMPLE = "mcp_sample"
+    PROMPT = "mcp_prompt"
 
 
 def resolve_schema_references(schema: Dict[str, Any], openapi_schema: Dict[str, Any]) -> Dict[str, Any]:
@@ -106,6 +114,7 @@ def create_mcp_tools_from_openapi(
     base_url: Optional[str] = None,
     describe_all_responses: bool = False,
     describe_full_response_schema: bool = False,
+    exclude_untagged: bool = False,
 ) -> None:
     """
     Create MCP tools from a FastAPI app's OpenAPI schema.
@@ -116,6 +125,7 @@ def create_mcp_tools_from_openapi(
         base_url: Base URL for API requests (defaults to http://localhost:$PORT)
         describe_all_responses: Whether to include all possible response schemas in tool descriptions
         describe_full_response_schema: Whether to include full response schema in tool descriptions
+        exclude_untagged: Whether to exclude tools that do not have MCP type tags (mcp_tool, mcp_resource, mcp_sample, mcp_prompt)
     """
     # Get OpenAPI schema from FastAPI app
     openapi_schema = get_openapi(
@@ -144,6 +154,12 @@ def create_mcp_tools_from_openapi(
         base_url = base_url[:-1]
 
     # Process each path in the OpenAPI schema
+    mcp_types = {
+        MCPType.TOOL.value,
+        MCPType.RESOURCE.value,
+        MCPType.SAMPLE.value,
+        MCPType.PROMPT.value,
+    }
     for path, path_item in openapi_schema.get("paths", {}).items():
         for method, operation in path_item.items():
             # Skip non-HTTP methods
@@ -155,8 +171,20 @@ def create_mcp_tools_from_openapi(
             if not operation_id:
                 continue
 
+            # If we do not create tools by default,
+            # Skip registering tools unless they are explicitly allowed
+            tags = mcp_types.intersection(set(operation.get("tags", [])))
+            tag = MCPType(tags.pop()) if len(tags) >= 1 else None
+            if len(tags) > 1:
+                logger.warning(f"Operation {operation_id} has multiple MCP types. Using {tag}, but found {tags}")
+            if tag is None:
+                if exclude_untagged:
+                    continue
+                else:
+                    tag = MCPType.TOOL
+
             # Create MCP tool for this operation
-            create_http_tool(
+            create_http_mcp_call(
                 mcp_server=mcp_server,
                 base_url=base_url,
                 path=path,
@@ -170,10 +198,11 @@ def create_mcp_tools_from_openapi(
                 openapi_schema=openapi_schema,
                 describe_all_responses=describe_all_responses,
                 describe_full_response_schema=describe_full_response_schema,
+                mcp_type=tag,
             )
 
 
-def create_http_tool(
+def create_http_mcp_call(
     mcp_server: FastMCP,
     base_url: str,
     path: str,
@@ -187,12 +216,13 @@ def create_http_tool(
     openapi_schema: Dict[str, Any],
     describe_all_responses: bool,
     describe_full_response_schema: bool,
+    mcp_type: MCPType,
 ) -> None:
     """
-    Create an MCP tool that makes an HTTP request to a FastAPI endpoint.
+    Create an MCP resource, tool, sample, or prompt that makes an HTTP request to a FastAPI endpoint.
 
     Args:
-        mcp_server: The MCP server to add the tool to
+        mcp_server: The MCP server to add calls to
         base_url: Base URL for API requests
         path: API endpoint path
         method: HTTP method
@@ -203,13 +233,14 @@ def create_http_tool(
         request_body: OpenAPI request body
         responses: OpenAPI responses
         openapi_schema: The full OpenAPI schema
-        describe_all_responses: Whether to include all possible response schemas in tool descriptions
-        describe_full_response_schema: Whether to include full response schema in tool descriptions
+        describe_all_responses: Whether to include all possible response schemas in descriptions
+        describe_full_response_schema: Whether to include full response schema in descriptions
+        mcp_type: MCP type.
     """
-    # Build tool description
-    tool_description = f"{summary}" if summary else f"{method.upper()} {path}"
+    # Build call description
+    call_description = f"{summary}" if summary else f"{method.upper()} {path}"
     if description:
-        tool_description += f"\n\n{description}"
+        call_description += f"\n\n{description}"
 
     # Add response schema information to description
     if responses:
@@ -300,6 +331,7 @@ def create_http_tool(
                             not example_response
                             and display_schema.get("type") == "array"
                             and items_model_name == "Item"
+                            and mcp_type == MCPType.TOOL
                         ):
                             example_response = [
                                 {
@@ -351,7 +383,7 @@ def create_http_tool(
                                 response_info += json.dumps(display_schema, indent=2)
                                 response_info += "\n```"
 
-        tool_description += response_info
+        call_description += response_info
 
     # Organize parameters by type
     path_params = []
@@ -436,7 +468,7 @@ def create_http_tool(
             required_props.append(param_name)
 
     # Function to dynamically call the API endpoint
-    async def http_tool_function(kwargs: Dict[str, Any] = Field(default_factory=dict)):
+    async def http_function(kwargs: Dict[str, Any] = Field(default_factory=dict)):
         # Prepare URL with path parameters
         url = f"{base_url}{path}"
         for param_name, _ in path_params:
@@ -480,25 +512,32 @@ def create_http_tool(
         except ValueError:
             return response.text
 
-    # Create a proper input schema for the tool
-    input_schema = {"type": "object", "properties": properties, "title": f"{operation_id}Arguments"}
-
-    if required_props:
-        input_schema["required"] = required_props
-
     # Set the function name and docstring
-    http_tool_function.__name__ = operation_id
-    http_tool_function.__doc__ = tool_description
+    http_function.__name__ = operation_id
+    http_function.__doc__ = call_description
 
-    # Monkey patch the function's schema for MCP tool creation
-    # TODO: Maybe revise this hacky approach
-    http_tool_function._input_schema = input_schema  # type: ignore
+    if mcp_type == MCPType.TOOL:
+        # Create a proper input schema for the tool
+        input_schema = {
+            "type": "object",
+            "properties": properties,
+            "title": f"{operation_id}Arguments",
+        }
 
-    # Add tool to the MCP server with the enhanced schema
-    tool = mcp_server._tool_manager.add_tool(http_tool_function, name=operation_id, description=tool_description)
+        if required_props:
+            input_schema["required"] = required_props
 
-    # Update the tool's parameters to use our custom schema instead of the auto-generated one
-    tool.parameters = input_schema
+        # Monkey patch the function's schema for MCP tool creation
+        # TODO: Maybe revise this hacky approach
+        http_function._input_schema = input_schema  # type: ignore
+
+        # Add tool to the MCP server with the enhanced schema
+        tool = mcp_server._tool_manager.add_tool(http_function, name=operation_id, description=call_description)
+
+        # Update the tool's parameters to use our custom schema instead of the auto-generated one
+        tool.parameters = input_schema
+    else:
+        raise NotImplementedError(f"MCP type {mcp_type} not implemented")
 
 
 def extract_model_examples_from_components(
@@ -561,7 +600,15 @@ def generate_example_from_schema(schema: Dict[str, Any], model_name: Optional[st
         }
     elif model_name == "HTTPValidationError":
         # Create a realistic validation error example
-        return {"detail": [{"loc": ["body", "name"], "msg": "field required", "type": "value_error.missing"}]}
+        return {
+            "detail": [
+                {
+                    "loc": ["body", "name"],
+                    "msg": "field required",
+                    "type": "value_error.missing",
+                }
+            ]
+        }
 
     # Handle different types
     schema_type = schema.get("type")
