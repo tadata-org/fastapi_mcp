@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -12,6 +14,29 @@ class Item(BaseModel):
     description: Optional[str] = None
     price: float
     tags: List[str] = []
+
+
+class Task(BaseModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    completed: bool = False
+    required_resources: List[Item] = []
+
+
+def remove_default_values(schema: dict) -> dict:
+    if "default" in schema:
+        schema.pop("default")
+
+    for value in schema.values():
+        if isinstance(value, dict):
+            remove_default_values(value)
+
+    return schema
+
+
+def normalize_json_schema(schema: dict) -> str:
+    return json.dumps(remove_default_values(schema), sort_keys=True)
 
 
 @pytest.fixture
@@ -49,6 +74,14 @@ def sample_app():
         Returns the created item.
         """
         return item
+
+    @app.get("/tasks/", response_model=List[Task], tags=["tasks"])
+    async def list_tasks(
+        skip: int = 0,
+        limit: int = 10,
+    ):
+        """List all tasks with pagination options."""
+        return []
 
     return app
 
@@ -96,7 +129,10 @@ def test_tool_generation_with_full_schema(sample_app):
     """Test that MCP tools include full response schema when requested."""
     # Create MCP server with full schema for all operations
     mcp_server = add_mcp_server(
-        sample_app, serve_tools=True, base_url="http://localhost:8000", describe_full_response_schema=True
+        sample_app,
+        serve_tools=True,
+        base_url="http://localhost:8000",
+        describe_full_response_schema=True,
     )
 
     # Extract tools for inspection
@@ -109,16 +145,44 @@ def test_tool_generation_with_full_schema(sample_app):
             continue
 
         description = tool.description
-        # Check that the tool includes information about the Item schema
-        assert "Item" in description, f"Item schema should be included in the description for {tool.name}"
-        assert "price" in description, f"Item properties should be included in the description for {tool.name}"
+
+        # Check that the tool includes information about the Item or Task schema
+        if tool.name == "list_tasks_tasks__get":
+            model = Task
+        elif "Item" in description:
+            model = Item
+        elif "Task" not in description:
+            raise ValueError(f"Item or Task schema should be included in the description for {tool.name}")
+
+        assert "price" in description or "required_resources" in description, (
+            f"Item or Task properties should be included in the description for {tool.name}"
+        )
+
+        # Get the output schema from the description
+        lines = description.split("\n")
+        for index, line in enumerate(lines):
+            if "Output Schema" in line:
+                index += 2
+                break
+
+        # Normalize the output schema
+        output_schema_str = normalize_json_schema(json.loads("\n".join(lines[index:-1])))
+
+        # Generate and normalize the model schema
+        model_schema_str = normalize_json_schema(model.model_json_schema())
+
+        # Check that the output schema matches the model schema
+        assert output_schema_str == model_schema_str, f"Output schema does not match model schema for {tool.name}"
 
 
 def test_tool_generation_with_all_responses(sample_app):
     """Test that MCP tools include all possible responses when requested."""
     # Create MCP server with all response status codes
     mcp_server = add_mcp_server(
-        sample_app, serve_tools=True, base_url="http://localhost:8000", describe_all_responses=True
+        sample_app,
+        serve_tools=True,
+        base_url="http://localhost:8000",
+        describe_all_responses=True,
     )
 
     # Extract tools for inspection
