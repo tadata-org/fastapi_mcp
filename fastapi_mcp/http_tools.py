@@ -6,7 +6,7 @@ This module provides functionality for creating MCP tools from FastAPI endpoints
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 from fastapi import FastAPI
@@ -14,90 +14,17 @@ from fastapi.openapi.utils import get_openapi
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
+from .openapi_utils import (
+    OPENAPI_PYTHON_TYPES_MAP,
+    clean_schema_for_display,
+    extract_model_examples_from_components,
+    generate_example_from_schema,
+    parse_parameters_for_args_schema,
+    resolve_schema_references,
+    PYTHON_TYPE_IMPORTS,
+)
+
 logger = logging.getLogger("fastapi_mcp")
-
-
-def resolve_schema_references(schema: Dict[str, Any], openapi_schema: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Resolve schema references in OpenAPI schemas.
-
-    Args:
-        schema: The schema that may contain references
-        openapi_schema: The full OpenAPI schema to resolve references from
-
-    Returns:
-        The schema with references resolved
-    """
-    # Make a copy to avoid modifying the input schema
-    schema = schema.copy()
-
-    # Handle $ref directly in the schema
-    if "$ref" in schema:
-        ref_path = schema["$ref"]
-        # Standard OpenAPI references are in the format "#/components/schemas/ModelName"
-        if ref_path.startswith("#/components/schemas/"):
-            model_name = ref_path.split("/")[-1]
-            if "components" in openapi_schema and "schemas" in openapi_schema["components"]:
-                if model_name in openapi_schema["components"]["schemas"]:
-                    # Replace with the resolved schema
-                    ref_schema = openapi_schema["components"]["schemas"][model_name].copy()
-                    # Remove the $ref key and merge with the original schema
-                    schema.pop("$ref")
-                    schema.update(ref_schema)
-
-    # Handle array items
-    if "type" in schema and schema["type"] == "array" and "items" in schema:
-        schema["items"] = resolve_schema_references(schema["items"], openapi_schema)
-
-    # Handle object properties
-    if "properties" in schema:
-        for prop_name, prop_schema in schema["properties"].items():
-            schema["properties"][prop_name] = resolve_schema_references(prop_schema, openapi_schema)
-
-    return schema
-
-
-def clean_schema_for_display(schema: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Clean up a schema for display by removing internal fields.
-
-    Args:
-        schema: The schema to clean
-
-    Returns:
-        The cleaned schema
-    """
-    # Make a copy to avoid modifying the input schema
-    schema = schema.copy()
-
-    # Remove common internal fields that are not helpful for LLMs
-    fields_to_remove = [
-        "allOf",
-        "anyOf",
-        "oneOf",
-        "nullable",
-        "discriminator",
-        "readOnly",
-        "writeOnly",
-        "xml",
-        "externalDocs",
-    ]
-    for field in fields_to_remove:
-        if field in schema:
-            schema.pop(field)
-
-    # Process nested properties
-    if "properties" in schema:
-        for prop_name, prop_schema in schema["properties"].items():
-            if isinstance(prop_schema, dict):
-                schema["properties"][prop_name] = clean_schema_for_display(prop_schema)
-
-    # Process array items
-    if "type" in schema and schema["type"] == "array" and "items" in schema:
-        if isinstance(schema["items"], dict):
-            schema["items"] = clean_schema_for_display(schema["items"])
-
-    return schema
 
 
 def create_mcp_tools_from_openapi(
@@ -172,6 +99,29 @@ def create_mcp_tools_from_openapi(
                 describe_full_response_schema=describe_full_response_schema,
             )
 
+def _create_http_tool_function(function_template: Callable, args_schema: Dict[str, Any], additional_variables: Dict[str, Any]) -> Callable:
+    # Build parameter string with type hints
+    param_list = []
+    for name, type_info in args_schema.items():
+        type_hint = OPENAPI_PYTHON_TYPES_MAP.get(type_info, 'Any')
+        param_list.append(f"{name}: {type_hint}")
+    parameters_str = ", ".join(param_list)
+    
+    dynamic_function_body = f"""async def dynamic_http_tool_function({parameters_str}):
+        kwargs = {{{', '.join([f"'{k}': {k}" for k in args_schema.keys()])}}}
+        return await http_tool_function_template(**kwargs)
+    """
+    
+    # Create function namespace with required imports
+    namespace = {
+        "http_tool_function_template": function_template,
+        **PYTHON_TYPE_IMPORTS,
+        **additional_variables
+    }
+    
+    # Execute the dynamic function definition
+    exec(dynamic_function_body, namespace)
+    return namespace["dynamic_http_tool_function"]
 
 def create_http_tool(
     mcp_server: FastMCP,
@@ -435,8 +385,14 @@ def create_http_tool(
         if param_required:
             required_props.append(param_name)
 
-    # Function to dynamically call the API endpoint
-    async def http_tool_function(kwargs: Dict[str, Any] = Field(default_factory=dict)):
+    # Create a proper input schema for the tool
+    input_schema = {"type": "object", "properties": properties, "title": f"{operation_id}Arguments"}
+
+    if required_props:
+        input_schema["required"] = required_props
+    
+    # Dynamically create a function to  call the API endpoint
+    async def http_tool_function_template(**kwargs):
         # Prepare URL with path parameters
         url = f"{base_url}{path}"
         for param_name, _ in path_params:
@@ -480,13 +436,10 @@ def create_http_tool(
         except ValueError:
             return response.text
 
-    # Create a proper input schema for the tool
-    input_schema = {"type": "object", "properties": properties, "title": f"{operation_id}Arguments"}
-
-    if required_props:
-        input_schema["required"] = required_props
-
-    # Set the function name and docstring
+    # Create the http_tool_function (with name and docstring)
+    args_schema = parse_parameters_for_args_schema(parameters)
+    additional_variables = {"path_params": path_params, "query_params": query_params, "header_params": header_params}
+    http_tool_function = _create_http_tool_function(http_tool_function_template, args_schema, additional_variables)
     http_tool_function.__name__ = operation_id
     http_tool_function.__doc__ = tool_description
 
@@ -499,116 +452,3 @@ def create_http_tool(
 
     # Update the tool's parameters to use our custom schema instead of the auto-generated one
     tool.parameters = input_schema
-
-
-def extract_model_examples_from_components(
-    model_name: str, openapi_schema: Dict[str, Any]
-) -> Optional[List[Dict[str, Any]]]:
-    """
-    Extract examples from a model definition in the OpenAPI components.
-
-    Args:
-        model_name: The name of the model to extract examples from
-        openapi_schema: The full OpenAPI schema
-
-    Returns:
-        List of example dictionaries if found, None otherwise
-    """
-    if "components" not in openapi_schema or "schemas" not in openapi_schema["components"]:
-        return None
-
-    if model_name not in openapi_schema["components"]["schemas"]:
-        return None
-
-    schema = openapi_schema["components"]["schemas"][model_name]
-
-    # Look for examples in the schema
-    examples = None
-
-    # Check for examples field directly (OpenAPI 3.1.0+)
-    if "examples" in schema:
-        examples = schema["examples"]
-    # Check for example field (older OpenAPI versions)
-    elif "example" in schema:
-        examples = [schema["example"]]
-
-    return examples
-
-
-def generate_example_from_schema(schema: Dict[str, Any], model_name: Optional[str] = None) -> Any:
-    """
-    Generate a simple example response from a JSON schema.
-
-    Args:
-        schema: The JSON schema to generate an example from
-        model_name: Optional model name for special handling
-
-    Returns:
-        An example object based on the schema
-    """
-    if not schema or not isinstance(schema, dict):
-        return None
-
-    # Special handling for known model types
-    if model_name == "Item":
-        # Create a realistic Item example since this is commonly used
-        return {
-            "id": 1,
-            "name": "Hammer",
-            "description": "A tool for hammering nails",
-            "price": 9.99,
-            "tags": ["tool", "hardware"],
-        }
-    elif model_name == "HTTPValidationError":
-        # Create a realistic validation error example
-        return {"detail": [{"loc": ["body", "name"], "msg": "field required", "type": "value_error.missing"}]}
-
-    # Handle different types
-    schema_type = schema.get("type")
-
-    if schema_type == "object":
-        result = {}
-        if "properties" in schema:
-            for prop_name, prop_schema in schema["properties"].items():
-                # Generate an example for each property
-                prop_example = generate_example_from_schema(prop_schema)
-                if prop_example is not None:
-                    result[prop_name] = prop_example
-        return result
-
-    elif schema_type == "array":
-        if "items" in schema:
-            # Generate a single example item
-            item_example = generate_example_from_schema(schema["items"])
-            if item_example is not None:
-                return [item_example]
-        return []
-
-    elif schema_type == "string":
-        # Check if there's a format
-        format_type = schema.get("format")
-        if format_type == "date-time":
-            return "2023-01-01T00:00:00Z"
-        elif format_type == "date":
-            return "2023-01-01"
-        elif format_type == "email":
-            return "user@example.com"
-        elif format_type == "uri":
-            return "https://example.com"
-        # Use title or property name if available
-        return schema.get("title", "string")
-
-    elif schema_type == "integer":
-        return 1
-
-    elif schema_type == "number":
-        return 1.0
-
-    elif schema_type == "boolean":
-        return True
-
-    elif schema_type == "null":
-        return None
-
-    # Default case
-    return None
