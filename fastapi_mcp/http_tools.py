@@ -15,11 +15,9 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
 from .openapi_utils import (
-    OPENAPI_PYTHON_TYPES_MAP,
     clean_schema_for_display,
-    extract_model_examples_from_components,
     generate_example_from_schema,
-    parse_parameters_for_args_schema,
+    parse_param_schema_for_python_type_and_default,
     resolve_schema_references,
     PYTHON_TYPE_IMPORTS,
 )
@@ -54,7 +52,7 @@ def create_mcp_tools_from_openapi(
     )
 
     # Resolve all references in the schema at once
-    openapi_schema = resolve_schema_references(openapi_schema, openapi_schema)
+    resolved_openapi_schema = resolve_schema_references(openapi_schema, openapi_schema)
 
     if not base_url:
         # Try to determine the base URL from FastAPI config
@@ -74,7 +72,7 @@ def create_mcp_tools_from_openapi(
         base_url = base_url[:-1]
 
     # Process each path in the OpenAPI schema
-    for path, path_item in openapi_schema.get("paths", {}).items():
+    for path, path_item in resolved_openapi_schema.get("paths", {}).items():
         for method, operation in path_item.items():
             # Skip non-HTTP methods
             if method not in ["get", "post", "put", "delete", "patch"]:
@@ -97,24 +95,28 @@ def create_mcp_tools_from_openapi(
                 parameters=operation.get("parameters", []),
                 request_body=operation.get("requestBody", {}),
                 responses=operation.get("responses", {}),
-                openapi_schema=openapi_schema,
+                openapi_schema=resolved_openapi_schema,
                 describe_all_responses=describe_all_responses,
                 describe_full_response_schema=describe_full_response_schema,
             )
 
-def _create_http_tool_function(function_template: Callable, args_schema: Dict[str, Any], additional_variables: Dict[str, Any]) -> Callable:
+def _create_http_tool_function(function_template: Callable, properties: Dict[str, Any], additional_variables: Dict[str, Any]) -> Callable:
     # Build parameter string with type hints
     param_list = []
-    for name, type_info in args_schema.items():
-        type_hint = OPENAPI_PYTHON_TYPES_MAP.get(type_info, 'Any')
-        param_list.append(f"{name}: {type_hint}")
-    parameters_str = ", ".join(param_list)
-    
+    param_list_with_defaults = []
+    for name, schema in properties.items():
+        type_hint, has_default_value = parse_param_schema_for_python_type_and_default(schema)
+        if has_default_value:
+            param_list_with_defaults.append(f"{name}: {type_hint}")
+        else:
+            param_list.append(f"{name}: {type_hint}")
+    parameters_str = ", ".join(param_list + param_list_with_defaults)
+
     dynamic_function_body = f"""async def dynamic_http_tool_function({parameters_str}):
-        kwargs = {{{', '.join([f"'{k}': {k}" for k in args_schema.keys()])}}}
+        kwargs = {{{', '.join([f"'{k}': {k}" for k in properties.keys()])}}}
         return await http_tool_function_template(**kwargs)
     """
-    
+
     # Create function namespace with required imports
     namespace = {
         "http_tool_function_template": function_template,
@@ -207,13 +209,6 @@ def create_http_tool(
                         model_name = None
                         model_examples = None
                         items_model_name = None
-                        if "$ref" in schema:  # This check is now just for information
-                            ref_path = schema["$ref"]
-                            if ref_path.startswith("#/components/schemas/"):
-                                model_name = ref_path.split("/")[-1]
-                                response_info += f"\nModel: {model_name}"
-                                # Try to get examples from the model
-                                model_examples = extract_model_examples_from_components(model_name, openapi_schema)
 
                         # Check if this is an array of items
                         if schema.get("type") == "array" and "items" in schema and "$ref" in schema["items"]:
@@ -390,7 +385,7 @@ def create_http_tool(
 
     if required_props:
         input_schema["required"] = required_props
-    
+
     # Dynamically create a function to  call the API endpoint
     async def http_tool_function_template(**kwargs):
         # Prepare URL with path parameters
@@ -437,9 +432,8 @@ def create_http_tool(
             return response.text
 
     # Create the http_tool_function (with name and docstring)
-    args_schema = parse_parameters_for_args_schema(parameters)
     additional_variables = {"path_params": path_params, "query_params": query_params, "header_params": header_params}
-    http_tool_function = _create_http_tool_function(http_tool_function_template, args_schema, additional_variables)
+    http_tool_function = _create_http_tool_function(http_tool_function_template, properties, additional_variables)
     http_tool_function.__name__ = operation_id
     http_tool_function.__doc__ = tool_description
 
