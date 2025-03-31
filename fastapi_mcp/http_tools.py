@@ -12,7 +12,6 @@ import httpx
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from mcp.server.fastmcp import FastMCP
-from pydantic import Field
 
 from .openapi_utils import (
     clean_schema_for_display,
@@ -433,7 +432,7 @@ def create_http_tool(
 
     # Create the http_tool_function (with name and docstring)
     additional_variables = {"path_params": path_params, "query_params": query_params, "header_params": header_params}
-    http_tool_function = _create_http_tool_function(http_tool_function_template, properties, additional_variables)
+    http_tool_function = _create_http_tool_function(http_tool_function_template, properties, additional_variables) # type: ignore
     http_tool_function.__name__ = operation_id
     http_tool_function.__doc__ = tool_description
 

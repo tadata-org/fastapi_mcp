@@ -129,11 +129,11 @@ def parse_param_schema_for_python_type_and_default(param_schema: Dict[str, Any])
             types.remove("null")
             if types:
                 return f"Optional[{OPENAPI_PYTHON_TYPES_MAP.get(next(iter(types)), 'Any')}] = None", True
-            return f"Optional[str] = None", True
+            return "Optional[str] = None", True
         return f"Union[{', '.join([OPENAPI_PYTHON_TYPES_MAP.get(t, 'Any') for t in types])}]", False
     
     # Handle direct type specification
-    python_type = OPENAPI_PYTHON_TYPES_MAP.get(param_schema.get("type"), 'Any')
+    python_type = OPENAPI_PYTHON_TYPES_MAP.get(param_schema.get("type", ""), 'Any')
     default_value = param_schema.get("default")
     if default_value is not None:   
         return f"{python_type} = {default_value}", True
