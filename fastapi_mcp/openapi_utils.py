@@ -147,44 +147,47 @@ def parse_parameters_for_args_schema(parameters: List[Dict[str, Any]]) -> Dict[s
     
     return args_schema
 
-def resolve_schema_references(schema: Dict[str, Any], openapi_schema: Dict[str, Any]) -> Dict[str, Any]:
+def resolve_schema_references(schema_part: Dict[str, Any], reference_schema: Dict[str, Any]) -> Dict[str, Any]:
     """
     Resolve schema references in OpenAPI schemas.
 
     Args:
-        schema: The schema that may contain references
-        openapi_schema: The full OpenAPI schema to resolve references from
+        schema_part: The part of the schema being processed that may contain references
+        reference_schema: The complete schema used to resolve references from
 
     Returns:
         The schema with references resolved
     """
     # Make a copy to avoid modifying the input schema
-    schema = schema.copy()
+    schema_part = schema_part.copy()
 
     # Handle $ref directly in the schema
-    if "$ref" in schema:
-        ref_path = schema["$ref"]
+    if "$ref" in schema_part:
+        ref_path = schema_part["$ref"]
         # Standard OpenAPI references are in the format "#/components/schemas/ModelName"
         if ref_path.startswith("#/components/schemas/"):
             model_name = ref_path.split("/")[-1]
-            if "components" in openapi_schema and "schemas" in openapi_schema["components"]:
-                if model_name in openapi_schema["components"]["schemas"]:
+            if "components" in reference_schema and "schemas" in reference_schema["components"]:
+                if model_name in reference_schema["components"]["schemas"]:
                     # Replace with the resolved schema
-                    ref_schema = openapi_schema["components"]["schemas"][model_name].copy()
+                    ref_schema = reference_schema["components"]["schemas"][model_name].copy()
                     # Remove the $ref key and merge with the original schema
-                    schema.pop("$ref")
-                    schema.update(ref_schema)
+                    schema_part.pop("$ref")
+                    schema_part.update(ref_schema)
 
-    # Handle array items
-    if "type" in schema and schema["type"] == "array" and "items" in schema:
-        schema["items"] = resolve_schema_references(schema["items"], openapi_schema)
+    # Recursively resolve references in all dictionary values
+    for key, value in schema_part.items():
+        if isinstance(value, dict):
+            schema_part[key] = resolve_schema_references(value, reference_schema)
+        elif isinstance(value, list):
+            # Only process list items that are dictionaries since only they can contain refs
+            schema_part[key] = [
+                resolve_schema_references(item, reference_schema) if isinstance(item, dict)
+                else item 
+                for item in value
+            ]
 
-    # Handle object properties
-    if "properties" in schema:
-        for prop_name, prop_schema in schema["properties"].items():
-            schema["properties"][prop_name] = resolve_schema_references(prop_schema, openapi_schema)
-
-    return schema
+    return schema_part
 
 def clean_schema_for_display(schema: Dict[str, Any]) -> Dict[str, Any]:
     """

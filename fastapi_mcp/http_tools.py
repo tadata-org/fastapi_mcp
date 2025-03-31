@@ -53,6 +53,9 @@ def create_mcp_tools_from_openapi(
         routes=app.routes,
     )
 
+    # Resolve all references in the schema at once
+    openapi_schema = resolve_schema_references(openapi_schema, openapi_schema)
+
     if not base_url:
         # Try to determine the base URL from FastAPI config
         if hasattr(app, "root_path") and app.root_path:
@@ -197,17 +200,14 @@ def create_http_tool(
                         schema = content_data["schema"]
                         response_info += f"\nContent-Type: {content_type}"
 
-                        # Resolve any schema references
-                        resolved_schema = resolve_schema_references(schema, openapi_schema)
-
                         # Clean the schema for display
-                        display_schema = clean_schema_for_display(resolved_schema)
+                        display_schema = clean_schema_for_display(schema)
 
                         # Get model name if it's a referenced model
                         model_name = None
                         model_examples = None
                         items_model_name = None
-                        if "$ref" in schema:
+                        if "$ref" in schema:  # This check is now just for information
                             ref_path = schema["$ref"]
                             if ref_path.startswith("#/components/schemas/"):
                                 model_name = ref_path.split("/")[-1]
