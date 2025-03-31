@@ -16,7 +16,8 @@ from mcp.server.fastmcp import FastMCP
 from .openapi_utils import (
     clean_schema_for_display,
     generate_example_from_schema,
-    parse_param_schema_for_python_type_and_default,
+    get_python_type_and_default,
+    get_single_param_type_from_schema,
     resolve_schema_references,
     PYTHON_TYPE_IMPORTS,
 )
@@ -101,18 +102,22 @@ def create_mcp_tools_from_openapi(
 
 def _create_http_tool_function(function_template: Callable, properties: Dict[str, Any], additional_variables: Dict[str, Any]) -> Callable:
     # Build parameter string with type hints
-    param_list = []
-    param_list_with_defaults = []
-    for name, schema in properties.items():
-        type_hint, has_default_value = parse_param_schema_for_python_type_and_default(schema)
+    parsed_parameters = {}
+    parsed_parameters_with_defaults = {}
+    for param_name, parsed_param_schema in properties.items():
+        type_hint, has_default_value = get_python_type_and_default(parsed_param_schema)
         if has_default_value:
-            param_list_with_defaults.append(f"{name}: {type_hint}")
+            parsed_parameters_with_defaults[param_name] = f"{param_name}: {type_hint}"
         else:
-            param_list.append(f"{name}: {type_hint}")
-    parameters_str = ", ".join(param_list + param_list_with_defaults)
+            parsed_parameters[param_name] = f"{param_name}: {type_hint}"
+
+    parsed_parameters_keys = list(parsed_parameters.keys()) + list(parsed_parameters_with_defaults.keys())
+    parsed_parameters_values = list(parsed_parameters.values()) + list(parsed_parameters_with_defaults.values())
+    parameters_str = ", ".join(parsed_parameters_values)
+    kwargs_str = ', '.join([f"'{k}': {k}" for k in parsed_parameters_keys])
 
     dynamic_function_body = f"""async def dynamic_http_tool_function({parameters_str}):
-        kwargs = {{{', '.join([f"'{k}': {k}" for k in properties.keys()])}}}
+        kwargs = {{{kwargs_str}}}
         return await http_tool_function_template(**kwargs)
     """
 
@@ -302,7 +307,6 @@ def create_http_tool(
     query_params = []
     header_params = []
     body_params = []
-
     for param in parameters:
         param_name = param.get("name")
         param_in = param.get("in")
@@ -360,10 +364,12 @@ def create_http_tool(
         param_required = param.get("required", False)
 
         properties[param_name] = {
-            "type": param_schema.get("type", "string"),
+            "type": get_single_param_type_from_schema(param_schema),
             "title": param_name,
             "description": param_desc,
         }
+        if "default" in param_schema:
+            properties[param_name]["default"] = param_schema["default"]
 
         if param_required:
             required_props.append(param_name)
@@ -373,8 +379,13 @@ def create_http_tool(
         param_schema = param.get("schema", {})
         param_required = param.get("required", False)
 
-        properties[param_name] = param_schema
-        properties[param_name]["title"] = param_name
+        # properties[param_name] = param_schema
+        properties[param_name] = {
+            "type": get_single_param_type_from_schema(param_schema),
+            "title": param_name,
+        }
+        if "default" in param_schema:
+            properties[param_name]["default"] = param_schema["default"]
 
         if param_required:
             required_props.append(param_name)

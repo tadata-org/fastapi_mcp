@@ -107,36 +107,32 @@ OPENAPI_PYTHON_TYPES_MAP = {
     "unknown": "Any"
 }
 
-
-def parse_param_schema_for_python_type_and_default(param_schema: Dict[str, Any]) -> tuple[str, bool]:
+def get_single_param_type_from_schema(param_schema: Dict[str, Any]) -> str:
     """
-    Parse OpenAPI parameters into a python type and default value string.
-    
-    Args:
-        parameters: List of OpenAPI parameter objects
-        
-    Returns:
-        A tuple containing:
-            - A string representing the Python type annotation (e.g. "str", "Optional[int]", etc.)
-            - A boolean indicating whether a default value is present
+    Get the type of a parameter from the schema. 
+    If the schema is a union type, return the first type.
     """
-    # Handle anyOf case
     if "anyOf" in param_schema:
-        # Get a set of possible types for this parameter
         types = {schema.get("type") for schema in param_schema["anyOf"] if schema.get("type")}
-        # If null is one of the types, make None the default value
         if "null" in types:
             types.remove("null")
-            if types:
-                return f"Optional[{OPENAPI_PYTHON_TYPES_MAP.get(next(iter(types)), 'Any')}] = None", True
-            return "Optional[str] = None", True
-        return f"Union[{', '.join([OPENAPI_PYTHON_TYPES_MAP.get(t, 'Any') for t in types])}]", False
-    
+        if types:
+            return next(iter(types))
+        return "string"
+    return param_schema.get("type", "string")
+
+def get_python_type_and_default(parsed_param_schema: Dict[str, Any]) -> tuple[str, bool]:
+    """
+    Parse parameters into a python type and default value string.
+    Returns:
+        A tuple containing:
+            - A string representing the Python type annotation (e.g. "str", "int = 0", etc.)
+            - A boolean indicating whether a default value is present
+    """
     # Handle direct type specification
-    python_type = OPENAPI_PYTHON_TYPES_MAP.get(param_schema.get("type", ""), 'Any')
-    default_value = param_schema.get("default")
-    if default_value is not None:   
-        return f"{python_type} = {default_value}", True
+    python_type = OPENAPI_PYTHON_TYPES_MAP.get(parsed_param_schema.get("type", ""), "Any")
+    if "default" in parsed_param_schema:   
+        return f"{python_type} = {parsed_param_schema.get("default")}", True
     return python_type, False
 
 def resolve_schema_references(schema_part: Dict[str, Any], reference_schema: Dict[str, Any]) -> Dict[str, Any]:
