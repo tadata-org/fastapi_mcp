@@ -50,13 +50,24 @@ def sample_app():
         """
         return item
 
+    @app.post("/limited/", response_model=Item, tags=["items", "mcp_tool"])
+    async def create_limited_item(item: Item):
+        """
+        Create a new item.
+
+        Returns the created item.
+        """
+        return item
+
     return app
 
 
 def test_tool_generation_basic(sample_app):
     """Test that MCP tools are properly generated with default settings."""
     # Create MCP server and register tools
-    mcp_server = add_mcp_server(sample_app, serve_tools=True, base_url="http://localhost:8000")
+    mcp_server = add_mcp_server(
+        sample_app, serve_tools=True, base_url="http://localhost:8000"
+    )
 
     # Extract tools for inspection
     tools = mcp_server._tool_manager.list_tools()
@@ -76,27 +87,42 @@ def test_tool_generation_basic(sample_app):
             continue
 
         # With describe_all_responses=False by default, description should only include success response code
-        assert "200" in tool.description, f"Expected success response code in description for {tool.name}"
-        assert "422" not in tool.description, f"Expected not to see 422 response in tool description for {tool.name}"
+        assert (
+            "200" in tool.description
+        ), f"Expected success response code in description for {tool.name}"
+        assert (
+            "422" not in tool.description
+        ), f"Expected not to see 422 response in tool description for {tool.name}"
 
         # With describe_full_response_schema=False by default, description should not include the full output schema, only an example
-        assert "Example Response" in tool.description, f"Expected example response in description for {tool.name}"
-        assert "Output Schema" not in tool.description, (
-            f"Expected not to see output schema in description for {tool.name}"
-        )
+        assert (
+            "Example Response" in tool.description
+        ), f"Expected example response in description for {tool.name}"
+        assert (
+            "Output Schema" not in tool.description
+        ), f"Expected not to see output schema in description for {tool.name}"
 
     # Verify specific parameters are present in the appropriate tools
-    list_items_tool = next((t for t in tools if t.name == "list_items_items__get"), None)
+    list_items_tool = next(
+        (t for t in tools if t.name == "list_items_items__get"), None
+    )
     assert list_items_tool is not None, "list_items tool not found"
-    assert "skip" in list_items_tool.parameters["properties"], "Expected 'skip' parameter"
-    assert "limit" in list_items_tool.parameters["properties"], "Expected 'limit' parameter"
+    assert (
+        "skip" in list_items_tool.parameters["properties"]
+    ), "Expected 'skip' parameter"
+    assert (
+        "limit" in list_items_tool.parameters["properties"]
+    ), "Expected 'limit' parameter"
 
 
 def test_tool_generation_with_full_schema(sample_app):
     """Test that MCP tools include full response schema when requested."""
     # Create MCP server with full schema for all operations
     mcp_server = add_mcp_server(
-        sample_app, serve_tools=True, base_url="http://localhost:8000", describe_full_response_schema=True
+        sample_app,
+        serve_tools=True,
+        base_url="http://localhost:8000",
+        describe_full_response_schema=True,
     )
 
     # Extract tools for inspection
@@ -110,15 +136,22 @@ def test_tool_generation_with_full_schema(sample_app):
 
         description = tool.description
         # Check that the tool includes information about the Item schema
-        assert "Item" in description, f"Item schema should be included in the description for {tool.name}"
-        assert "price" in description, f"Item properties should be included in the description for {tool.name}"
+        assert (
+            "Item" in description
+        ), f"Item schema should be included in the description for {tool.name}"
+        assert (
+            "price" in description
+        ), f"Item properties should be included in the description for {tool.name}"
 
 
 def test_tool_generation_with_all_responses(sample_app):
     """Test that MCP tools include all possible responses when requested."""
     # Create MCP server with all response status codes
     mcp_server = add_mcp_server(
-        sample_app, serve_tools=True, base_url="http://localhost:8000", describe_all_responses=True
+        sample_app,
+        serve_tools=True,
+        base_url="http://localhost:8000",
+        describe_all_responses=True,
     )
 
     # Extract tools for inspection
@@ -130,8 +163,12 @@ def test_tool_generation_with_all_responses(sample_app):
         if tool.name == "handle_mcp_connection_mcp_get":
             continue
 
-        assert "200" in tool.description, f"Expected success response code in description for {tool.name}"
-        assert "422" in tool.description, f"Expected 422 response code in description for {tool.name}"
+        assert (
+            "200" in tool.description
+        ), f"Expected success response code in description for {tool.name}"
+        assert (
+            "422" in tool.description
+        ), f"Expected 422 response code in description for {tool.name}"
 
 
 def test_tool_generation_with_all_responses_and_full_schema(sample_app):
@@ -154,15 +191,23 @@ def test_tool_generation_with_all_responses_and_full_schema(sample_app):
         if tool.name == "handle_mcp_connection_mcp_get":
             continue
 
-        assert "200" in tool.description, f"Expected success response code in description for {tool.name}"
-        assert "422" in tool.description, f"Expected 422 response code in description for {tool.name}"
-        assert "Output Schema" in tool.description, f"Expected output schema in description for {tool.name}"
+        assert (
+            "200" in tool.description
+        ), f"Expected success response code in description for {tool.name}"
+        assert (
+            "422" in tool.description
+        ), f"Expected 422 response code in description for {tool.name}"
+        assert (
+            "Output Schema" in tool.description
+        ), f"Expected output schema in description for {tool.name}"
 
 
 def test_custom_tool_addition(sample_app):
     """Test that custom tools can be added alongside API tools."""
     # Create MCP server with API tools
-    mcp_server = add_mcp_server(sample_app, serve_tools=True, base_url="http://localhost:8000")
+    mcp_server = add_mcp_server(
+        sample_app, serve_tools=True, base_url="http://localhost:8000"
+    )
 
     # Get initial tool count
     initial_tool_count = len(mcp_server._tool_manager.list_tools())
@@ -177,12 +222,38 @@ def test_custom_tool_addition(sample_app):
     tools = mcp_server._tool_manager.list_tools()
 
     # Verify we have one more tool than before
-    assert len(tools) == initial_tool_count + 1, f"Expected {initial_tool_count + 1} tools, got {len(tools)}"
+    assert (
+        len(tools) == initial_tool_count + 1
+    ), f"Expected {initial_tool_count + 1} tools, got {len(tools)}"
 
     # Find both API tools and custom tools
-    list_items_tool = next((t for t in tools if t.name == "list_items_items__get"), None)
+    list_items_tool = next(
+        (t for t in tools if t.name == "list_items_items__get"), None
+    )
     assert list_items_tool is not None, "API tool (list_items) not found"
 
     custom_tool_def = next((t for t in tools if t.name == "custom_tool"), None)
     assert custom_tool_def is not None, "Custom tool not found"
-    assert custom_tool_def.description == "A custom tool for testing.", "Custom tool description not preserved"
+    assert (
+        custom_tool_def.description == "A custom tool for testing."
+    ), "Custom tool description not preserved"
+
+
+def test_tool_addition_with_tags(sample_app):
+    """Test that custom tools can be added alongside API tools."""
+    # Create MCP server with API tools
+    mcp_server = add_mcp_server(
+        sample_app,
+        serve_tools=True,
+        base_url="http://localhost:8000",
+        exclude_untagged=True,
+    )
+
+    # Get initial tool count
+    tool_count = len(mcp_server._tool_manager.list_tools())
+
+    # Make sure there is exactly 1 tool
+    assert tool_count == 1, f"Expected exactly 1 tool, got {tool_count}"
+
+    # Extract tools for inspection
+    tools = mcp_server._tool_manager.list_tools()

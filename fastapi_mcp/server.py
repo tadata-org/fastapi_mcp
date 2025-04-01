@@ -56,6 +56,7 @@ def mount_mcp_server(
     base_url: Optional[str] = None,
     describe_all_responses: bool = False,
     describe_full_response_schema: bool = False,
+    exclude_untagged: bool = False,
 ) -> None:
     """
     Mount an MCP server to a FastAPI app.
@@ -68,6 +69,7 @@ def mount_mcp_server(
         base_url: Base URL for API requests
         describe_all_responses: Whether to include all possible response schemas in tool descriptions. Recommended to keep False, as the LLM will probably derive if there is an error.
         describe_full_response_schema: Whether to include full json schema for responses in tool descriptions. Recommended to keep False, as examples are more LLM friendly, and save tokens.
+        exclude_untagged: Whether to exclude untagged endpoints from being served as tools.
     """
     # Normalize mount path
     if not mount_path.startswith("/"):
@@ -99,6 +101,7 @@ def mount_mcp_server(
             base_url,
             describe_all_responses=describe_all_responses,
             describe_full_response_schema=describe_full_response_schema,
+            exclude_untagged=exclude_untagged,
         )
 
 
@@ -112,6 +115,7 @@ def add_mcp_server(
     base_url: Optional[str] = None,
     describe_all_responses: bool = False,
     describe_full_response_schema: bool = False,
+    exclude_untagged: bool = False,
 ) -> FastMCP:
     """
     Add an MCP server to a FastAPI app.
@@ -142,6 +146,7 @@ def add_mcp_server(
         base_url,
         describe_all_responses=describe_all_responses,
         describe_full_response_schema=describe_full_response_schema,
+        exclude_untagged=exclude_untagged,
     )
 
     return mcp_server

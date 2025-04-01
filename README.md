@@ -83,6 +83,37 @@ async def get_server_time() -> str:
     return datetime.now().isoformat()
 ```
 
+By default, all API endpoints are turned into an MCP Tool. However, it is possible to explicitly declare what type of MCP object you want to turn an API endpoint into. Current this only works for `mcp_tool`, but will be extended to include `mcp_resource`, `mcp_prompt`, and `mcp_sample` in the future.
+
+```python
+from fastapi import FastAPI
+from fastapi_mcp import add_mcp_server
+
+app = FastAPI()
+
+@app.get("/items/{item_id}", response_model=Item, tags=["items", "mcp_tool"])
+async def get_item(item_id: int):
+    """Get an item by ID."""
+    return {"item_id": item_id}
+
+mcp_server = add_mcp_server(
+    app,                                    # Your FastAPI app
+    mount_path="/mcp",                      # Where to mount the MCP server
+    name="My API MCP",                      # Name for the MCP server
+)
+```
+
+In some cases you may want to exclude certain endpoints from being turned into MCP objects. This can be done by setting the `exclude_untagged` parameter to `True`:
+
+```python
+mcp_server = add_mcp_server(
+    app,                                    # Your FastAPI app
+    mount_path="/mcp",                      # Where to mount the MCP server
+    name="My API MCP",                      # Name for the MCP server
+    exclude_untagged=True,                  # Exclude all endpoints that don't have the "mcp_tool" tag
+)
+```
+
 ## Examples
 
 See the [examples](examples) directory for complete examples.
