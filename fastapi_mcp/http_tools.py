@@ -17,7 +17,9 @@ from pydantic import Field
 logger = logging.getLogger("fastapi_mcp")
 
 
-def resolve_schema_references(schema: Dict[str, Any], openapi_schema: Dict[str, Any]) -> Dict[str, Any]:
+def resolve_schema_references(
+    schema: Dict[str, Any], openapi_schema: Dict[str, Any], top_schema=None
+) -> Dict[str, Any]:
     """
     Resolve schema references in OpenAPI schemas.
 
@@ -31,6 +33,9 @@ def resolve_schema_references(schema: Dict[str, Any], openapi_schema: Dict[str, 
     # Make a copy to avoid modifying the input schema
     schema = schema.copy()
 
+    # Create a a definnition prefix for the schema
+    def_prefix = "#/$defs/"
+
     # Handle $ref directly in the schema
     if "$ref" in schema:
         ref_path = schema["$ref"]
@@ -41,18 +46,42 @@ def resolve_schema_references(schema: Dict[str, Any], openapi_schema: Dict[str, 
                 if model_name in openapi_schema["components"]["schemas"]:
                     # Replace with the resolved schema
                     ref_schema = openapi_schema["components"]["schemas"][model_name].copy()
-                    # Remove the $ref key and merge with the original schema
-                    schema.pop("$ref")
-                    schema.update(ref_schema)
+
+                    if top_schema is not None:
+                        # Create the $defs key if it doesn't exist
+                        if "$defs" not in top_schema:
+                            top_schema["$defs"] = {}
+
+                        ref_schema = resolve_schema_references(ref_schema, openapi_schema, top_schema=top_schema)
+
+                        # Create the definition reference
+                        top_schema["$defs"][model_name] = ref_schema
+
+                        # Update the schema with the definition reference
+                        schema["$ref"] = def_prefix + model_name
+                    else:
+                        # Update the schema with the definition reference
+                        schema.pop("$ref")
+                        schema.update(ref_schema)
+                        top_schema = schema
+
+    # Handle anyOf, oneOf, allOf
+    for key in ["anyOf", "oneOf", "allOf"]:
+        if key in schema:
+            for index, item in enumerate(schema[key]):
+                item = resolve_schema_references(item, openapi_schema, top_schema=top_schema)
+                schema[key][index] = item
 
     # Handle array items
     if "type" in schema and schema["type"] == "array" and "items" in schema:
-        schema["items"] = resolve_schema_references(schema["items"], openapi_schema)
+        schema["items"] = resolve_schema_references(schema["items"], openapi_schema, top_schema=top_schema)
 
     # Handle object properties
     if "properties" in schema:
         for prop_name, prop_schema in schema["properties"].items():
-            schema["properties"][prop_name] = resolve_schema_references(prop_schema, openapi_schema)
+            schema["properties"][prop_name] = resolve_schema_references(
+                prop_schema, openapi_schema, top_schema=top_schema
+            )
 
     return schema
 
@@ -72,9 +101,6 @@ def clean_schema_for_display(schema: Dict[str, Any]) -> Dict[str, Any]:
 
     # Remove common internal fields that are not helpful for LLMs
     fields_to_remove = [
-        "allOf",
-        "anyOf",
-        "oneOf",
         "nullable",
         "discriminator",
         "readOnly",
@@ -481,7 +507,11 @@ def create_http_tool(
             return response.text
 
     # Create a proper input schema for the tool
-    input_schema = {"type": "object", "properties": properties, "title": f"{operation_id}Arguments"}
+    input_schema = {
+        "type": "object",
+        "properties": properties,
+        "title": f"{operation_id}Arguments",
+    }
 
     if required_props:
         input_schema["required"] = required_props
@@ -561,7 +591,15 @@ def generate_example_from_schema(schema: Dict[str, Any], model_name: Optional[st
         }
     elif model_name == "HTTPValidationError":
         # Create a realistic validation error example
-        return {"detail": [{"loc": ["body", "name"], "msg": "field required", "type": "value_error.missing"}]}
+        return {
+            "detail": [
+                {
+                    "loc": ["body", "name"],
+                    "msg": "field required",
+                    "type": "value_error.missing",
+                }
+            ]
+        }
 
     # Handle different types
     schema_type = schema.get("type")

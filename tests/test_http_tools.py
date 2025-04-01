@@ -86,7 +86,13 @@ def test_resolve_schema_references():
     openapi_schema = {
         "components": {
             "schemas": {
-                "Item": {"type": "object", "properties": {"id": {"type": "integer"}, "name": {"type": "string"}}}
+                "Item": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "name": {"type": "string"},
+                    },
+                }
             }
         }
     }
@@ -141,7 +147,13 @@ def test_create_mcp_tools_from_complex_app(complex_app):
     assert len(api_tools) == 5, f"Expected 5 API tools, got {len(api_tools)}"
 
     # Check for all expected tools with the correct name pattern
-    tool_operations = ["list_items", "read_item", "create_item", "update_item", "delete_item"]
+    tool_operations = [
+        "list_items",
+        "read_item",
+        "create_item",
+        "update_item",
+        "delete_item",
+    ]
     for operation in tool_operations:
         matching_tools = [t for t in tools if operation in t.name]
         assert len(matching_tools) > 0, f"No tool found for operation '{operation}'"
