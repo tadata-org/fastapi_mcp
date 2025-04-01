@@ -71,10 +71,6 @@ def test_tool_generation_basic(sample_app):
         assert hasattr(tool, "parameters"), "Tool missing 'parameters' property"
         assert hasattr(tool, "fn_metadata"), "Tool missing 'fn_metadata' property"
 
-        # Skip MCP's internal tool that doesn't follow the same patterns
-        if tool.name == "handle_mcp_connection_mcp_get":
-            continue
-
         # With describe_all_responses=False by default, description should only include success response code
         assert "200" in tool.description, f"Expected success response code in description for {tool.name}"
         assert "422" not in tool.description, f"Expected not to see 422 response in tool description for {tool.name}"
@@ -104,10 +100,6 @@ def test_tool_generation_with_full_schema(sample_app):
 
     # Check all tools have the appropriate schema information
     for tool in tools:
-        # Skip MCP's internal tool that doesn't follow the same patterns
-        if tool.name == "handle_mcp_connection_mcp_get":
-            continue
-
         description = tool.description
         # Check that the tool includes information about the Item schema
         assert "Item" in description, f"Item schema should be included in the description for {tool.name}"
@@ -126,10 +118,6 @@ def test_tool_generation_with_all_responses(sample_app):
 
     # Check all API tools include all response status codes
     for tool in tools:
-        # Skip MCP's internal tool that doesn't follow the same patterns
-        if tool.name == "handle_mcp_connection_mcp_get":
-            continue
-
         assert "200" in tool.description, f"Expected success response code in description for {tool.name}"
         assert "422" in tool.description, f"Expected 422 response code in description for {tool.name}"
 
@@ -150,10 +138,6 @@ def test_tool_generation_with_all_responses_and_full_schema(sample_app):
 
     # Check all tools include all response status codes and the full output schema
     for tool in tools:
-        # Skip MCP's internal tool that doesn't follow the same patterns
-        if tool.name == "handle_mcp_connection_mcp_get":
-            continue
-
         assert "200" in tool.description, f"Expected success response code in description for {tool.name}"
         assert "422" in tool.description, f"Expected 422 response code in description for {tool.name}"
         assert "Output Schema" in tool.description, f"Expected output schema in description for {tool.name}"
