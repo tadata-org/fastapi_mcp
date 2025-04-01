@@ -23,7 +23,7 @@ def sample_app():
         version="0.1.0",
     )
 
-    @app.get("/items/", response_model=List[Item], tags=["items"])
+    @app.get("/items/", response_model=List[Item], tags=["items","include_in_mcp"])
     async def list_items(skip: int = 0, limit: int = 10):
         """
         List all items.
@@ -32,7 +32,7 @@ def sample_app():
         """
         return []
 
-    @app.get("/items/{item_id}", response_model=Item, tags=["items"])
+    @app.get("/items/{item_id}", response_model=Item, tags=["items","include_in_mcp"])
     async def read_item(item_id: int):
         """
         Get a specific item by ID.
@@ -40,6 +40,36 @@ def sample_app():
         Returns the item with the specified ID.
         """
         return {"id": item_id, "name": "Test Item", "price": 0.0}
+
+    @app.post("/items/", response_model=Item, tags=["items", "include_in_mcp"])
+    async def create_item(item: Item):
+        """
+        Create a new item.
+
+        Returns the created item.
+        """
+        return item
+
+    return app
+
+
+@pytest.fixture
+def sample_app_with_tool_exclusions():
+    """Create a sample FastAPI app with some tools excluded from MCP."""
+    app = FastAPI(
+        title="Test API",
+        description="A test API for unit testing",
+        version="0.1.0", 
+    )
+
+    @app.get("/items/", response_model=List[Item], tags=["items", "include_in_mcp"])
+    async def list_items(skip: int = 0, limit: int = 10):
+        """
+        List all items.
+
+        Returns a list of items, with pagination support.
+        """
+        return []
 
     @app.post("/items/", response_model=Item, tags=["items"])
     async def create_item(item: Item):
@@ -51,7 +81,6 @@ def sample_app():
         return item
 
     return app
-
 
 def test_tool_generation_basic(sample_app):
     """Test that MCP tools are properly generated with default settings."""
@@ -90,6 +119,26 @@ def test_tool_generation_basic(sample_app):
     assert list_items_tool is not None, "list_items tool not found"
     assert "skip" in list_items_tool.parameters["properties"], "Expected 'skip' parameter"
     assert "limit" in list_items_tool.parameters["properties"], "Expected 'limit' parameter"
+
+
+def test_tool_generation_with_exclusions(sample_app_with_tool_exclusions):
+    """Test that  only tools tagged with "include_in_mcp"' are registered."""
+    # Create MCP server and register tools
+    mcp_server = add_mcp_server(sample_app_with_tool_exclusions, serve_tools=True, base_url="http://localhost:8000", create_tools_by_default = False)
+
+    # Extract tools for inspection
+    tools = mcp_server._tool_manager.list_tools()
+
+    # Should only have list_items endpoint and MCP endpoint (create_item excluded)
+    assert len(tools) ==2, f"Expected 2 tools (list_items + MCP endpoint), got {len(tools)}"
+
+    # Verify list_items endpoint is present
+    list_items_tool = next((t for t in tools if t.name == "list_items_items__get"), None)
+    assert list_items_tool is not None, "list_items tool not found"
+
+    # Verify create_item endpoint is not present (should be excluded)
+    create_item_tool = next((t for t in tools if t.name == "create_item_items__post"), None)
+    assert create_item_tool is None, "create_item tool should be excluded but was found"
 
 
 def test_tool_generation_with_full_schema(sample_app):
