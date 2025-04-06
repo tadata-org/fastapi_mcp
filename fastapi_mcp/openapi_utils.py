@@ -132,7 +132,7 @@ def get_python_type_and_default(parsed_param_schema: Dict[str, Any]) -> tuple[st
     # Handle direct type specification
     python_type = OPENAPI_PYTHON_TYPES_MAP.get(parsed_param_schema.get("type", ""), "Any")
     if "default" in parsed_param_schema:   
-        return f"{python_type} = {parsed_param_schema.get("default")}", True
+        return f"{python_type} = {parsed_param_schema.get('default')}", True
     return python_type, False
 
 def resolve_schema_references(schema_part: Dict[str, Any], reference_schema: Dict[str, Any]) -> Dict[str, Any]:
