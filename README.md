@@ -135,6 +135,8 @@ Find the path to mcp-proxy by running in Terminal: `which mcp-proxy`.
 
 ## Development and Contributing
 
+**Notice:** We are currently refactoring our MCP auto-generation system. To avoid potential conflicts, we kindly request that you delay submitting contributions until this notice is removed from the README. Thank you for your understanding and patience.
+
 Thank you for considering contributing to FastAPI-MCP open source projects! It’s people like you that make it a reality for users in our community.
 
 Before you get started, please see [CONTRIBUTING.md](CONTRIBUTING.md).
