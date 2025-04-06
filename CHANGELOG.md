@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - [Issue #34](https://github.com/tadata-org/fastapi_mcp/issues/34): Fix syntax error.
+
 ## [0.1.6]
 
 ### Fixed
