@@ -83,10 +83,6 @@ def create_mcp_tools_from_openapi(
             if not operation_id:
                 continue
 
-            # Skip MCP's internal tool that doesn't follow the same patterns
-            if operation_id == "handle_mcp_connection_mcp_get":
-                continue
-
             # Create MCP tool for this operation
             create_http_tool(
                 mcp_server=mcp_server,

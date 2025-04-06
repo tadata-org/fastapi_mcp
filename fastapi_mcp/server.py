@@ -87,10 +87,6 @@ def mount_mcp_server(
                 mcp_server._mcp_server.create_initialization_options(),
             )
 
-    # Mount the MCP connection handler
-    app.get(mount_path)(handle_mcp_connection)
-    app.mount(f"{mount_path}/messages/", app=sse_transport.handle_post_message)
-
     # Serve tools from the FastAPI app if requested
     if serve_tools:
         create_mcp_tools_from_openapi(
@@ -100,6 +96,11 @@ def mount_mcp_server(
             describe_all_responses=describe_all_responses,
             describe_full_response_schema=describe_full_response_schema,
         )
+    
+    # Mount the MCP connection handler
+    app.get(mount_path)(handle_mcp_connection)
+    app.mount(f"{mount_path}/messages/", app=sse_transport.handle_post_message)
+
 
 
 def add_mcp_server(
