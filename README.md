@@ -7,6 +7,8 @@
 [![Python Versions](https://img.shields.io/pypi/pyversions/fastapi-mcp.svg)](https://pypi.org/project/fastapi-mcp/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009485.svg?logo=fastapi&logoColor=white)](#)
 ![](https://badge.mcpx.dev?type=dev 'MCP Dev')
+[![CI](https://github.com/tadata-org/fastapi_mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/tadata-org/fastapi_mcp/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/tadata-org/fastapi_mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/tadata-org/fastapi_mcp)
 
 </div>
 
@@ -97,9 +99,9 @@ Once your FastAPI app with MCP integration is running, you can connect to it wit
 
 3. Cursor will discover all available tools and resources automatically.
 
-## Connecting to the MCP Server using [mcp-proxy stdio](https://github.com/sparfenyuk/mcp-proxy?tab=readme-ov-file#1-stdio-to-sse) 
+## Connecting to the MCP Server using [mcp-proxy stdio](https://github.com/sparfenyuk/mcp-proxy?tab=readme-ov-file#1-stdio-to-sse)
 
-If your MCP client does not support SSE, for example Claude Desktop: 
+If your MCP client does not support SSE, for example Claude Desktop:
 
 1. Run your application.
 
@@ -118,7 +120,7 @@ On Windows:
   }
 }
 ```
-On MacOS: 
+On MacOS:
 ```json
 {
   "mcpServers": {
@@ -137,7 +139,7 @@ Find the path to mcp-proxy by running in Terminal: `which mcp-proxy`.
 
 **Notice:** We are currently refactoring our MCP auto-generation system. To avoid potential conflicts, we kindly request that you delay submitting contributions until this notice is removed from the README. Thank you for your understanding and patience.
 
-Thank you for considering contributing to FastAPI-MCP open source projects! It’s people like you that make it a reality for users in our community.
+Thank you for considering contributing to FastAPI-MCP open source projects! It's people like you that make it a reality for users in our community.
 
 Before you get started, please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
