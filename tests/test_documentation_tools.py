@@ -1,7 +1,6 @@
 import pytest
 import json
 from pathlib import Path
-from unittest.mock import patch, mock_open, MagicMock
 from fastapi_mcp.documentation_tools import (
     _get_file_priority,
     _prioritize_files,
