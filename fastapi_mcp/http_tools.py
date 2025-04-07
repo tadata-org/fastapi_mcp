@@ -5,13 +5,14 @@ This module provides functionality for creating MCP tools from FastAPI endpoints
 """
 
 import json
-import logging
 from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from mcp.server.fastmcp import FastMCP
+
+from .logger import logger
 
 from .openapi_utils import (
     clean_schema_for_display,
@@ -22,7 +23,6 @@ from .openapi_utils import (
     PYTHON_TYPE_IMPORTS,
 )
 
-logger = logging.getLogger("fastapi_mcp")
 
 
 def create_mcp_tools_from_openapi(
