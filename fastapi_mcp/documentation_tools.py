@@ -138,3 +138,5 @@ def create_documentation_tools(mcp_server: FastMCP, docs_path: Union[str, List[s
         return DocumentationResponse(
                 docs=[ContentItem(text=content, source=source) for content, source in all_content],
             ).to_dict()
+
+    # TODO: Add tool to search documentation

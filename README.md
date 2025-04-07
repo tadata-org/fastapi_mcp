@@ -83,6 +83,19 @@ async def get_server_time() -> str:
     return datetime.now().isoformat()
 ```
 
+You can also auto-create a documentation tool, that will easily expose your docs to the AI agent. Refer to the [detailed example](examples/mcp_server_with_docs.py).
+
+```python
+from fastapi import FastAPI
+from fastapi_mcp import add_mcp_server
+from fastapi_mcp.documentation_tools import create_documentation_tools
+
+app = FastAPI()
+mcp_server = add_mcp_server(app) 
+
+create_documentation_tools(mcp_server, "README.md")
+```
+
 ## Examples
 
 See the [examples](examples) directory for complete examples.
