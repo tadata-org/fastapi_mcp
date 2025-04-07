@@ -16,7 +16,7 @@ class DocumentationResponse:
 
     @classmethod
     def error(cls) -> "DocumentationResponse":
-        return cls(docs=[ContentItem(text="Error getting documentation")], file_used=None)
+        return cls(docs=[ContentItem(text="Error getting documentation")])
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -47,7 +47,7 @@ def _prioritize_files(files: List[Path]) -> List[Path]:
         return []
         
     # Group files by priority
-    priority_groups = {0: [], 1: [], 2: []}
+    priority_groups: Dict[int, List[Path]] = {0: [], 1: [], 2: []}
     for file in files:
         priority = _get_file_priority(file)
         priority_groups[priority].append(file)
