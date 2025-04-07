@@ -50,6 +50,9 @@ Documentation = "https://github.com/tadata-org/fastapi_mcp#readme"
 [project.scripts]
 fastapi-mcp = "fastapi_mcp.cli:app"
 
+[tool.hatch.build.targets.wheel]
+packages = ["fastapi_mcp"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py310"
