@@ -34,7 +34,7 @@ setup(
         "Topic :: Internet :: WWW/HTTP",
         "Framework :: FastAPI",
     ],
-    keywords=["fastapi", "openapi", "mcp", "llm", "claude", "ai", "tools", "api", "conversion"],
+    keywords=["fastapi", "openapi", "mcp", "llm", "claude", "ai", "tools", "api", "conversion", "modelcontextprotocol"],
     project_urls={
         "Homepage": "https://github.com/tadata-org/fastapi_mcp",
         "Documentation": "https://github.com/tadata-org/fastapi_mcp#readme",
