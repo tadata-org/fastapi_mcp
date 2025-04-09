@@ -324,6 +324,13 @@ def create_http_tool(
         content_type = next(iter(request_body["content"]), None)
         if content_type and "schema" in request_body["content"][content_type]:
             schema = request_body["content"][content_type]["schema"]
+            
+            # Check if the schema is a reference and resolve it
+            if "$ref" in schema:
+                resolved_schema = resolve_schema_references(schema, openapi_schema)
+                schema = resolved_schema
+            
+            # Process properties from the schema (could be from a resolved reference)
             if "properties" in schema:
                 for prop_name, prop_schema in schema["properties"].items():
                     required = prop_name in schema.get("required", [])
@@ -337,6 +344,25 @@ def create_http_tool(
                             },
                         )
                     )
+            # Handle the case where the schema might be for a nested Pydantic model
+            elif "allOf" in schema or "anyOf" in schema or "oneOf" in schema:
+                # Process composed schema types
+                schema_list = schema.get("allOf", []) or schema.get("anyOf", []) or schema.get("oneOf", [])
+                for sub_schema in schema_list:
+                    resolved_sub_schema = resolve_schema_references(sub_schema, openapi_schema)
+                    if "properties" in resolved_sub_schema:
+                        for prop_name, prop_schema in resolved_sub_schema["properties"].items():
+                            required = prop_name in resolved_sub_schema.get("required", [])
+                            body_params.append(
+                                (
+                                    prop_name,
+                                    {
+                                        "name": prop_name,
+                                        "schema": prop_schema,
+                                        "required": required,
+                                    },
+                                )
+                            )
 
     # Create input schema properties for all parameters
     properties = {}
@@ -417,7 +443,18 @@ def create_http_tool(
                 headers[param_name] = kwargs.pop(param_name)
 
         # Prepare request body (remaining kwargs)
-        body = kwargs if kwargs else None
+        body = None
+        if kwargs:
+            # Extract body parameters and transform any nested structures
+            body = {}
+            for key, value in kwargs.items():
+                # Check if the value is a dictionary that might represent a nested Pydantic model
+                if isinstance(value, dict):
+                    # Include the value as is (it's already a dict representation of a Pydantic model)
+                    body[key] = value
+                else:
+                    # For simple values, include them directly
+                    body[key] = value
 
         # Make the request
         logger.debug(f"Making {method.upper()} request to {url}")
@@ -429,7 +466,7 @@ def create_http_tool(
             elif method.lower() == "put":
                 response = await client.put(url, params=query, headers=headers, json=body)
             elif method.lower() == "delete":
-                response = await client.delete(url, params=query, headers=headers)
+                response = await client.delete(url, params=query, headers=headers, json=body)
             elif method.lower() == "patch":
                 response = await client.patch(url, params=query, headers=headers, json=body)
             else:
