@@ -35,7 +35,6 @@ dependencies = [
     "uvicorn>=0.20.0",
     "httpx>=0.24.0",
     "requests>=2.25.0",
-    "inspect-mate>=0.0.2",
     "tomli>=2.2.1",
 ]
 
