@@ -56,6 +56,7 @@ def mount_mcp_server(
     base_url: Optional[str] = None,
     describe_all_responses: bool = False,
     describe_full_response_schema: bool = False,
+    timeout: Optional[int] = None,
 ) -> None:
     """
     Mount an MCP server to a FastAPI app.
@@ -68,6 +69,7 @@ def mount_mcp_server(
         base_url: Base URL for API requests
         describe_all_responses: Whether to include all possible response schemas in tool descriptions. Recommended to keep False, as the LLM will probably derive if there is an error.
         describe_full_response_schema: Whether to include full json schema for responses in tool descriptions. Recommended to keep False, as examples are more LLM friendly, and save tokens.
+        timeout: Optional timeout for the server
     """
     # Normalize mount path
     if not mount_path.startswith("/"):
@@ -95,12 +97,12 @@ def mount_mcp_server(
             base_url,
             describe_all_responses=describe_all_responses,
             describe_full_response_schema=describe_full_response_schema,
+            timeout=timeout,
         )
-    
+
     # Mount the MCP connection handler
     app.get(mount_path)(handle_mcp_connection)
     app.mount(f"{mount_path}/messages/", app=sse_transport.handle_post_message)
-
 
 
 def add_mcp_server(
@@ -113,6 +115,7 @@ def add_mcp_server(
     base_url: Optional[str] = None,
     describe_all_responses: bool = False,
     describe_full_response_schema: bool = False,
+    timeout: Optional[int] = None,
 ) -> FastMCP:
     """
     Add an MCP server to a FastAPI app.
@@ -127,6 +130,7 @@ def add_mcp_server(
         base_url: Base URL for API requests (defaults to http://localhost:$PORT)
         describe_all_responses: Whether to include all possible response schemas in tool descriptions. Recommended to keep False, as the LLM will probably derive if there is an error.
         describe_full_response_schema: Whether to include full json schema for responses in tool descriptions. Recommended to keep False, as examples are more LLM friendly, and save tokens.
+        timeout: Optional timeout for the server
 
     Returns:
         The FastMCP instance that was created and mounted
@@ -143,6 +147,7 @@ def add_mcp_server(
         base_url,
         describe_all_responses=describe_all_responses,
         describe_full_response_schema=describe_full_response_schema,
+        timeout=timeout,
     )
 
     return mcp_server

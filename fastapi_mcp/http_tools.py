@@ -31,6 +31,7 @@ def create_mcp_tools_from_openapi(
     base_url: Optional[str] = None,
     describe_all_responses: bool = False,
     describe_full_response_schema: bool = False,
+    timeout: Optional[float] = None,
 ) -> None:
     """
     Create MCP tools from a FastAPI app's OpenAPI schema.
@@ -41,6 +42,7 @@ def create_mcp_tools_from_openapi(
         base_url: Base URL for API requests (defaults to http://localhost:$PORT)
         describe_all_responses: Whether to include all possible response schemas in tool descriptions
         describe_full_response_schema: Whether to include full response schema in tool descriptions
+        timeout: Optional timeout for the HTTP request
     """
     # Get OpenAPI schema from FastAPI app
     openapi_schema = get_openapi(
@@ -98,9 +100,13 @@ def create_mcp_tools_from_openapi(
                 openapi_schema=resolved_openapi_schema,
                 describe_all_responses=describe_all_responses,
                 describe_full_response_schema=describe_full_response_schema,
+                timeout=timeout,
             )
 
-def _create_http_tool_function(function_template: Callable, properties: Dict[str, Any], additional_variables: Dict[str, Any]) -> Callable:
+
+def _create_http_tool_function(
+    function_template: Callable, properties: Dict[str, Any], additional_variables: Dict[str, Any]
+) -> Callable:
     # Build parameter string with type hints
     parsed_parameters = {}
     parsed_parameters_with_defaults = {}
@@ -114,7 +120,7 @@ def _create_http_tool_function(function_template: Callable, properties: Dict[str
     parsed_parameters_keys = list(parsed_parameters.keys()) + list(parsed_parameters_with_defaults.keys())
     parsed_parameters_values = list(parsed_parameters.values()) + list(parsed_parameters_with_defaults.values())
     parameters_str = ", ".join(parsed_parameters_values)
-    kwargs_str = ', '.join([f"'{k}': {k}" for k in parsed_parameters_keys])
+    kwargs_str = ", ".join([f"'{k}': {k}" for k in parsed_parameters_keys])
 
     dynamic_function_body = f"""async def dynamic_http_tool_function({parameters_str}):
         kwargs = {{{kwargs_str}}}
@@ -122,15 +128,12 @@ def _create_http_tool_function(function_template: Callable, properties: Dict[str
     """
 
     # Create function namespace with required imports
-    namespace = {
-        "http_tool_function_template": function_template,
-        **PYTHON_TYPE_IMPORTS,
-        **additional_variables
-    }
-    
+    namespace = {"http_tool_function_template": function_template, **PYTHON_TYPE_IMPORTS, **additional_variables}
+
     # Execute the dynamic function definition
     exec(dynamic_function_body, namespace)
     return namespace["dynamic_http_tool_function"]
+
 
 def create_http_tool(
     mcp_server: FastMCP,
@@ -146,6 +149,7 @@ def create_http_tool(
     openapi_schema: Dict[str, Any],
     describe_all_responses: bool,
     describe_full_response_schema: bool,
+    timeout: Optional[float] = None,
 ) -> None:
     """
     Create an MCP tool that makes an HTTP request to a FastAPI endpoint.
@@ -164,6 +168,7 @@ def create_http_tool(
         openapi_schema: The full OpenAPI schema
         describe_all_responses: Whether to include all possible response schemas in tool descriptions
         describe_full_response_schema: Whether to include full response schema in tool descriptions
+        timeout: Optional timeout for the HTTP request
     """
     # Build tool description
     tool_description = f"{summary}" if summary else f"{method.upper()} {path}"
@@ -421,7 +426,7 @@ def create_http_tool(
 
         # Make the request
         logger.debug(f"Making {method.upper()} request to {url}")
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             if method.lower() == "get":
                 response = await client.get(url, params=query, headers=headers)
             elif method.lower() == "post":
@@ -443,7 +448,7 @@ def create_http_tool(
 
     # Create the http_tool_function (with name and docstring)
     additional_variables = {"path_params": path_params, "query_params": query_params, "header_params": header_params}
-    http_tool_function = _create_http_tool_function(http_tool_function_template, properties, additional_variables) # type: ignore
+    http_tool_function = _create_http_tool_function(http_tool_function_template, properties, additional_variables)  # type: ignore
     http_tool_function.__name__ = operation_id
     http_tool_function.__doc__ = tool_description
 
