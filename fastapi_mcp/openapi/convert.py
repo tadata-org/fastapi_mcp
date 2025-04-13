@@ -233,10 +233,8 @@ def convert_openapi_to_mcp_tools(
                 param_schema = param.get("schema", {})
                 param_required = param.get("required", False)
 
-                properties[param_name] = {
-                    "type": get_single_param_type_from_schema(param_schema),
-                    "title": param_name,
-                }
+                properties[param_name] = param_schema
+
                 if "default" in param_schema:
                     properties[param_name]["default"] = param_schema["default"]
 
