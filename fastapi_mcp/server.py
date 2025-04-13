@@ -293,15 +293,15 @@ class FastApiMCP:
     ) -> Any:
         """Helper method to make the actual HTTP request"""
         if method.lower() == "get":
-            return await client.get(url, params=query, headers=headers)
+            return await client.get(url, params=query, headers=headers, timeout=300)
         elif method.lower() == "post":
-            return await client.post(url, params=query, headers=headers, json=body)
+            return await client.post(url, params=query, headers=headers, json=body, timeout=300)
         elif method.lower() == "put":
-            return await client.put(url, params=query, headers=headers, json=body)
+            return await client.put(url, params=query, headers=headers, json=body, timeout=300)
         elif method.lower() == "delete":
-            return await client.delete(url, params=query, headers=headers)
+            return await client.delete(url, params=query, headers=headers, timeout=300)
         elif method.lower() == "patch":
-            return await client.patch(url, params=query, headers=headers, json=body)
+            return await client.patch(url, params=query, headers=headers, json=body, timeout=300)
         else:
             raise ValueError(f"Unsupported HTTP method: {method}")
 
