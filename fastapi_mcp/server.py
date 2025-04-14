@@ -102,6 +102,20 @@ class FastApiMCP:
         if len(self.tools) > 10:
             logger.warning(f"More than 10 tools exposed ({len(self.tools)}), which may impact user experience. Consider filtering tools to make the MCP more usable to the LLM.")
 
+        # Check for non-GET methods and warn about potential risks
+        non_get_tools = []
+        for tool_name in self.operation_map:
+            if self.operation_map[tool_name]["method"].lower() != "get":
+                non_get_tools.append(f"{tool_name} ({self.operation_map[tool_name]['method'].upper()})")
+        
+        if non_get_tools:
+            logger.warning(
+                f"Non-GET endpoints exposed as tools: {', '.join(non_get_tools)}. "
+                f"Using POST, DELETE, PUT, or PATCH endpoints as tools may lead to unwanted side effects "
+                f"and unexpected behaviors when called by LLMs. Consider using include/exclude filters "
+                f"to limit exposed endpoints to GET methods only, or ensure proper validation is in place."
+            )
+
         # Check for auto-generated operation IDs (typically containing double underscores)
         for tool in self.tools:
             # Looking for patterns that suggest auto-generated operation IDs: 
