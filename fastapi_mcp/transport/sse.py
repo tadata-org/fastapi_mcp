@@ -14,7 +14,7 @@ logger = getLogger(__name__)
 
 
 class FastApiSseTransport(SseServerTransport):
-    async def handle_fastapi_post_message(self, request: Request) -> Response:
+    async def handle_fastapi_post_message(self, request: Request, background_tasks: BackgroundTasks) -> Response:
         """
         A reimplementation of the handle_post_message method of SseServerTransport
         that integrates better with FastAPI.
@@ -60,8 +60,7 @@ class FastApiSseTransport(SseServerTransport):
             logger.debug(f"Validated client message: {message}")
         except ValidationError as err:
             logger.error(f"Failed to parse message: {err}")
-            # Create background task to send error
-            background_tasks = BackgroundTasks()
+            # Create background task to send error, to avoid ASGI race conditions
             background_tasks.add_task(self._send_message_safely, writer, err)
             response = JSONResponse(content={"error": "Could not parse message"}, status_code=400)
             response.background = background_tasks
@@ -70,8 +69,7 @@ class FastApiSseTransport(SseServerTransport):
             logger.error(f"Error processing request body: {e}")
             raise HTTPException(status_code=400, detail="Invalid request body")
 
-        # Create background task to send message
-        background_tasks = BackgroundTasks()
+        # Create background task to send message, to avoid ASGI race conditions
         background_tasks.add_task(self._send_message_safely, writer, message)
         logger.debug("Accepting message, will send in background")
 
