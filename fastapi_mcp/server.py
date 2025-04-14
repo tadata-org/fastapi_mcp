@@ -101,19 +101,10 @@ class FastApiMCP:
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
         
-        # Warn if too many tools are exposed
-        self._warn_if_too_many_tools(self.tools)
-
-        # Check for non-GET methods and warn about potential risks
-        non_get_tools = []
-        for tool_name in self.operation_map:
-            if self.operation_map[tool_name]["method"].lower() != "get":
-                non_get_tools.append(f"{tool_name} ({self.operation_map[tool_name]['method'].upper()})")
-        
-        self._warn_if_non_get_endpoints(non_get_tools)
-
-        # Check for auto-generated operation IDs
-        self._warn_if_auto_generated_operation_ids(self.tools)
+        # Check for warnings
+        self._warn_if_too_many_tools()
+        self._warn_if_non_get_endpoints()
+        self._warn_if_auto_generated_operation_ids()
 
         # Determine base URL if not provided
         if not self._base_url:
@@ -156,32 +147,31 @@ class FastApiMCP:
 
         self.server = mcp_server
 
-    def _warn_if_too_many_tools(self, tools: List[types.Tool]) -> None:
+    def _warn_if_too_many_tools(self) -> None:
         """
         Issue a warning if there are too many tools exposed, which may impact user experience.
-        
-        Args:
-            tools: List of tools to check
         """
         if self._disable_warnings:
             return
             
-        if len(tools) > 10:
+        if len(self.tools) > 10:
             logger.warning(
-                f"More than 10 tools exposed ({len(tools)}), which may impact user experience. "
+                f"More than 10 tools exposed ({len(self.tools)}), which may impact user experience. "
                 f"Consider filtering tools to make the MCP more usable to the LLM. "
                 f"To disable this warning, use disable_warnings=True when creating FastApiMCP."
             )
 
-    def _warn_if_non_get_endpoints(self, non_get_tools: List[str]) -> None:
+    def _warn_if_non_get_endpoints(self) -> None:
         """
         Issue a warning if non-GET endpoints are exposed as tools.
-        
-        Args:
-            non_get_tools: List of tool names with non-GET methods
         """
         if self._disable_warnings:
             return
+            
+        non_get_tools = []
+        for tool_name in self.operation_map:
+            if self.operation_map[tool_name]["method"].lower() != "get":
+                non_get_tools.append(f"{tool_name} ({self.operation_map[tool_name]['method'].upper()})")
             
         if non_get_tools:
             logger.warning(
@@ -192,23 +182,37 @@ class FastApiMCP:
                 f"To disable this warning, use disable_warnings=True when creating FastApiMCP."
             )
 
-    def _warn_if_auto_generated_operation_ids(self, tools: List[types.Tool]) -> None:
+    def _warn_if_auto_generated_operation_ids(self) -> None:
         """
-        Issue a warning if auto-generated operation IDs are detected.
-        
-        Args:
-            tools: List of tools to check for auto-generated operation IDs
+        Issue a warning if auto-generated operation IDs are detected by checking if operation_id 
+        was explicitly provided in FastAPI route definitions.
         """
         if self._disable_warnings:
             return
-            
-        for tool in tools:
-            # Looking for patterns that suggest auto-generated operation IDs: 
-            # - double underscores (common in FastAPI auto-generation)
-            # - ending with HTTP method (__get, __post, etc.)
-            # - underscore followed by HTTP method (_get, _post, etc.)
-            if '__' in tool.name or tool.name.endswith(('__get', '__post', '__put', '__delete', '__patch')) or \
-               any(tool.name.endswith(f"_{method}") for method in ['get', 'post', 'put', 'delete', 'patch']):
+                    
+        # Track routes with explicitly set operation_ids
+        explicit_operation_ids = set()
+        
+        # Check each route to see if operation_id was explicitly provided
+        for route in self.fastapi.routes:
+            # Skip special routes or routes without endpoint functions
+            if not hasattr(route, "endpoint"):
+                continue
+                
+            # Check if the route has an explicitly set operation_id
+            # This is the main attribute to check in FastAPI routes
+            if hasattr(route, "operation_id") and route.operation_id:
+                explicit_operation_ids.add(route.operation_id)
+                
+            # Also check if operation_id is in the route's openapi_extra attribute
+            # This is another way for operation_ids to be set in FastAPI
+            if hasattr(route, "openapi_extra") and route.openapi_extra:
+                if "operationId" in route.openapi_extra:
+                    explicit_operation_ids.add(route.openapi_extra["operationId"])
+        
+        # For each tool, check if it corresponds to a route with an auto-generated operation_id
+        for tool in self.tools:
+            if tool.name not in explicit_operation_ids:
                 logger.warning(
                     f"Tool '{tool.name}' appears to have an auto-generated operation_id. "
                     f"LLMs may struggle to use this tool effectively. Consider adding an explicit operation_id "
