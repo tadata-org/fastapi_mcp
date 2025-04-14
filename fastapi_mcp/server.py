@@ -97,6 +97,10 @@ class FastApiMCP:
 
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
+        
+        # Warn if too many tools are exposed
+        if len(self.tools) > 10:
+            logger.warning(f"More than 10 tools exposed ({len(self.tools)}), which may impact user experience. Consider filtering tools to make the MCP more usable to the LLM.")
 
         # Determine base URL if not provided
         if not self._base_url:
