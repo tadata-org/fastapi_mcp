@@ -102,6 +102,20 @@ class FastApiMCP:
         if len(self.tools) > 10:
             logger.warning(f"More than 10 tools exposed ({len(self.tools)}), which may impact user experience. Consider filtering tools to make the MCP more usable to the LLM.")
 
+        # Check for auto-generated operation IDs (typically containing double underscores)
+        for tool in self.tools:
+            # Looking for patterns that suggest auto-generated operation IDs: 
+            # - double underscores (common in FastAPI auto-generation)
+            # - ending with HTTP method (__get, __post, etc.)
+            # - underscore followed by HTTP method (_get, _post, etc.)
+            if '__' in tool.name or tool.name.endswith(('__get', '__post', '__put', '__delete', '__patch')) or \
+               any(tool.name.endswith(f"_{method}") for method in ['get', 'post', 'put', 'delete', 'patch']):
+                logger.warning(
+                    f"Tool '{tool.name}' appears to have an auto-generated operation_id. "
+                    f"LLMs may struggle to use this tool effectively. Consider adding an explicit operation_id "
+                    f"to the route or excluding it from MCP tools."
+                )
+
         # Determine base URL if not provided
         if not self._base_url:
             # Try to determine the base URL from FastAPI config
