@@ -2,7 +2,7 @@ import json
 import httpx
 from typing import Dict, Optional, Any, List, Union
 
-from fastapi import FastAPI, Request, APIRouter
+from fastapi import FastAPI, Request, APIRouter, BackgroundTasks
 from fastapi.openapi.utils import get_openapi
 from mcp.server.lowlevel.server import Server
 import mcp.types as types
@@ -183,8 +183,8 @@ class FastApiMCP:
 
         # Route for MCP messages
         @router.post(f"{mount_path}/messages/", include_in_schema=False, operation_id="mcp_messages")
-        async def handle_post_message(request: Request):
-            return await sse_transport.handle_fastapi_post_message(request)
+        async def handle_post_message(request: Request, background_tasks: BackgroundTasks):
+            return await sse_transport.handle_fastapi_post_message(request, background_tasks)
 
         # HACK: If we got a router and not a FastAPI instance, we need to re-include the router so that
         # FastAPI will pick up the new routes we added. The problem with this approach is that we assume
