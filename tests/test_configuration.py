@@ -615,3 +615,77 @@ def test_filtering_with_empty_tags_array():
     exclude_tags_mcp = FastApiMCP(app, exclude_tags=["items"])
     assert len(exclude_tags_mcp.tools) == 1
     assert {tool.name for tool in exclude_tags_mcp.tools} == {"empty_tags"}
+
+
+def test_only_get_endpoints_filtering():
+    """Test that FastApiMCP correctly filters to only GET endpoints when only_get_endpoints is True."""
+    app = FastAPI()
+
+    # Define endpoints with different HTTP methods
+    @app.get("/items/", operation_id="list_items", tags=["items"])
+    async def list_items():
+        return [{"id": 1}]
+
+    @app.get("/items/{item_id}", operation_id="get_item", tags=["items", "read"])
+    async def get_item(item_id: int):
+        return {"id": item_id}
+
+    @app.post("/items/", operation_id="create_item", tags=["items", "write"])
+    async def create_item():
+        return {"id": 2}
+
+    @app.put("/items/{item_id}", operation_id="update_item", tags=["items", "write"])
+    async def update_item(item_id: int):
+        return {"id": item_id}
+
+    @app.delete("/items/{item_id}", operation_id="delete_item", tags=["items", "delete"])
+    async def delete_item(item_id: int):
+        return {"id": item_id}
+
+    # Test only_get_endpoints=True
+    only_get_mcp = FastApiMCP(app, only_get_endpoints=True)
+    assert len(only_get_mcp.tools) == 2
+    assert {tool.name for tool in only_get_mcp.tools} == {"get_item", "list_items"}
+
+    # Test only_get_endpoints with include_operations
+    get_with_include_ops = FastApiMCP(
+        app, 
+        only_get_endpoints=True, 
+        include_operations=["get_item", "create_item", "update_item"]
+    )
+    assert len(get_with_include_ops.tools) == 1
+    assert {tool.name for tool in get_with_include_ops.tools} == {"get_item"}
+
+    # Test only_get_endpoints with exclude_operations
+    get_with_exclude_ops = FastApiMCP(
+        app, 
+        only_get_endpoints=True, 
+        exclude_operations=["list_items"]
+    )
+    assert len(get_with_exclude_ops.tools) == 1
+    assert {tool.name for tool in get_with_exclude_ops.tools} == {"get_item"}
+
+    # Test only_get_endpoints with include_tags
+    get_with_include_tags = FastApiMCP(
+        app, 
+        only_get_endpoints=True, 
+        include_tags=["read"]
+    )
+    assert len(get_with_include_tags.tools) == 1
+    assert {tool.name for tool in get_with_include_tags.tools} == {"get_item"}
+
+    # Test only_get_endpoints with exclude_tags
+    get_with_exclude_tags = FastApiMCP(
+        app, 
+        only_get_endpoints=True, 
+        exclude_tags=["read"]
+    )
+    assert len(get_with_exclude_tags.tools) == 1
+    assert {tool.name for tool in get_with_exclude_tags.tools} == {"list_items"}
+
+    # Test only_get_endpoints=False (should include all endpoints)
+    all_methods_mcp = FastApiMCP(app, only_get_endpoints=False)
+    assert len(all_methods_mcp.tools) == 5
+    assert {tool.name for tool in all_methods_mcp.tools} == {
+        "get_item", "list_items", "create_item", "update_item", "delete_item"
+    }
