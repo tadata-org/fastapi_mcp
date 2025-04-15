@@ -31,6 +31,7 @@ class FastApiMCP:
         exclude_operations: Optional[List[str]] = None,
         include_tags: Optional[List[str]] = None,
         exclude_tags: Optional[List[str]] = None,
+        only_get_endpoints: bool = False,
     ):
         """
         Create an MCP server from a FastAPI app.
@@ -50,6 +51,7 @@ class FastApiMCP:
             exclude_operations: List of operation IDs to exclude from MCP tools. Cannot be used with include_operations.
             include_tags: List of tags to include as MCP tools. Cannot be used with exclude_tags.
             exclude_tags: List of tags to exclude from MCP tools. Cannot be used with include_tags.
+            only_get_endpoints: If True, only expose GET endpoints. This filter is applied after other filters.
         """
         # Validate operation and tag filtering options
         if include_operations is not None and exclude_operations is not None:
@@ -73,6 +75,7 @@ class FastApiMCP:
         self._exclude_operations = exclude_operations
         self._include_tags = include_tags
         self._exclude_tags = exclude_tags
+        self._only_get_endpoints = only_get_endpoints
 
         self._http_client = http_client or httpx.AsyncClient()
 
@@ -316,15 +319,20 @@ class FastApiMCP:
         Returns:
             Filtered list of tools
         """
+        # Early return if no filters are applied
         if (
             self._include_operations is None
             and self._exclude_operations is None
             and self._include_tags is None
             and self._exclude_tags is None
+            and not self._only_get_endpoints
         ):
             return tools
 
+        # Build mapping of operation IDs to their HTTP methods
+        operation_methods: Dict[str, str] = {}
         operations_by_tag: Dict[str, List[str]] = {}
+        
         for path, path_item in openapi_schema.get("paths", {}).items():
             for method, operation in path_item.items():
                 if method not in ["get", "post", "put", "delete", "patch"]:
@@ -333,6 +341,9 @@ class FastApiMCP:
                 operation_id = operation.get("operationId")
                 if not operation_id:
                     continue
+                
+                # Store the HTTP method for each operation ID
+                operation_methods[operation_id] = method
 
                 tags = operation.get("tags", [])
                 for tag in tags:
@@ -340,31 +351,48 @@ class FastApiMCP:
                         operations_by_tag[tag] = []
                     operations_by_tag[tag].append(operation_id)
 
+        # Get all tool operation IDs
+        all_operations = {tool.name for tool in tools}
         operations_to_include = set()
 
+        # Handle empty include lists specially - they should result in no tools
         if self._include_operations is not None:
+            if not self._include_operations:  # Empty list means include nothing
+                return []
             operations_to_include.update(self._include_operations)
         elif self._exclude_operations is not None:
-            all_operations = {tool.name for tool in tools}
             operations_to_include.update(all_operations - set(self._exclude_operations))
 
+        # Apply tag filters
         if self._include_tags is not None:
+            if not self._include_tags:  # Empty list means include nothing
+                return []
             for tag in self._include_tags:
                 operations_to_include.update(operations_by_tag.get(tag, []))
         elif self._exclude_tags is not None:
             excluded_operations = set()
             for tag in self._exclude_tags:
                 excluded_operations.update(operations_by_tag.get(tag, []))
-
-            all_operations = {tool.name for tool in tools}
             operations_to_include.update(all_operations - excluded_operations)
 
-        filtered_tools = [tool for tool in tools if tool.name in operations_to_include]
+        # If no filters applied yet (but only_get_endpoints is True), include all operations
+        if not operations_to_include and self._only_get_endpoints:
+            operations_to_include = all_operations
 
+        # Apply GET-only filter if enabled
+        if self._only_get_endpoints:
+            get_operations = {op_id for op_id, method in operation_methods.items() if method.lower() == "get"}
+            operations_to_include &= get_operations  # Use set intersection operator
+
+        # Filter tools based on the final set of operations to include
+        filtered_tools = [tool for tool in tools if tool.name in operations_to_include]
+        
+        # Update operation_map with only the filtered operations
         if filtered_tools:
             filtered_operation_ids = {tool.name for tool in filtered_tools}
             self.operation_map = {
-                op_id: details for op_id, details in self.operation_map.items() if op_id in filtered_operation_ids
+                op_id: details for op_id, details in self.operation_map.items() 
+                if op_id in filtered_operation_ids
             }
 
         return filtered_tools
