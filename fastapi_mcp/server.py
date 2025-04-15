@@ -17,6 +17,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+FULL_TOOL_NAME_MAX_LENGTH = 55
+
 
 class LowlevelMCPServer(Server):
     def call_tool(self):
@@ -489,12 +491,33 @@ class FastApiMCP:
         operations_by_tag: Dict[str, List[str]] = {}
         for path, path_item in openapi_schema.get("paths", {}).items():
             for method, operation in path_item.items():
+                operation_id = operation.get("operationId")
                 if method not in ["get", "post", "put", "delete", "patch"]:
+                    logger.warning(f"Skipping non-HTTP method: {method.upper()} {path}, operation_id: {operation_id}")
                     continue
 
-                operation_id = operation.get("operationId")
                 if not operation_id:
+                    logger.warning(
+                        f"Skipping operation with no operationId: {method.upper()} {path}, details: {operation}"
+                    )
                     continue
+
+                operation_full_name = self.get_tool_full_name(operation_id)
+                if len(operation_full_name) > FULL_TOOL_NAME_MAX_LENGTH:
+                    logger.warning(f"Skipping operation with exceedingly long operationId: {operation_full_name}")
+                    continue
+
+                """
+                if method not in ["get", "post", "put", "delete", "patch"]:
+                logger.warning(f"Skipping non-HTTP method: {method.upper()} {path}")
+                continue
+
+            # Get operation metadata
+            operation_id = operation.get("operationId")
+            if not operation_id:
+                logger.warning(f"Skipping operation with no operationId: {method.upper()} {path}, details: {operation}")
+                continue
+                """
 
                 tags = operation.get("tags", [])
                 for tag in tags:
@@ -530,3 +553,6 @@ class FastApiMCP:
             }
 
         return filtered_tools
+
+    def get_tool_full_name(self, operation_id: str) -> str:
+        return f"{self.name}\\{operation_id}"
