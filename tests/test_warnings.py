@@ -1,128 +1,66 @@
-from unittest.mock import patch, Mock
+import pytest
 from fastapi import FastAPI, APIRouter
-import mcp.types as types
-
 from fastapi_mcp import FastApiMCP
+import logging
 
 
-def test_warn_if_too_many_tools():
-    """Test that a warning is issued when there are too many tools."""
-    # Create a simple app
-    app = FastAPI()
+@pytest.fixture
+def app_with_too_many_tools():
+    """Create a FastAPI app with more than 10 endpoints to trigger the 'too many tools' warning."""
+    app = FastAPI(
+        title="App with Too Many Tools",
+        description="An app with more than 10 endpoints to test warnings",
+    )
     
-    # Create FastApiMCP instance
-    mcp_server = FastApiMCP(app)
+    # Create more than 10 GET endpoints
+    for i in range(11):
+        @app.get(f"/items/{i}", operation_id=f"get_item_{i}")
+        async def get_item(item_id: int = i):
+            return {"item_id": item_id, "name": f"Item {item_id}"}
     
-    # Create tools list with more than 10 tools and set it directly
-    mcp_server.tools = [
-        types.Tool(
-            name=f"tool_{i}", 
-            description="A test tool",
-            inputSchema={"type": "object", "properties": {}, "title": f"Tool{i}Arguments"}
-        ) for i in range(11)
-    ]
-    
-    # Patch the logger.warning method
-    with patch("fastapi_mcp.server.logger.warning") as mock_warning:
-        # Call the warning method
-        mcp_server._warn_if_too_many_tools()
-        
-        # Check that warning was called with the correct message
-        mock_warning.assert_called_once()
-        assert "More than 10 tools exposed (11)" in mock_warning.call_args[0][0]
-        assert "To disable this warning" in mock_warning.call_args[0][0]
+    return app
 
 
-def test_warn_if_too_many_tools_no_warning():
-    """Test that no warning is issued when there are 10 or fewer tools."""
-    # Create a simple app
-    app = FastAPI()
+@pytest.fixture
+def app_with_non_get_endpoints():
+    """Create a FastAPI app with non-GET endpoints to trigger the warning."""
+    app = FastAPI(
+        title="App with Non-GET Endpoints",
+        description="An app with various HTTP methods to test warnings",
+    )
     
-    # Create FastApiMCP instance
-    mcp_server = FastApiMCP(app)
+    @app.get("/items", operation_id="list_items")
+    async def list_items():
+        return [{"id": 1, "name": "Item 1"}, {"id": 2, "name": "Item 2"}]
     
-    # Create tools list with exactly 10 tools and set it directly
-    mcp_server.tools = [
-        types.Tool(
-            name=f"tool_{i}", 
-            description="A test tool",
-            inputSchema={"type": "object", "properties": {}, "title": f"Tool{i}Arguments"}
-        ) for i in range(10)
-    ]
+    @app.post("/items", operation_id="create_item")
+    async def create_item(item: dict):
+        return {"id": 3, **item}
     
-    # Patch the logger.warning method
-    with patch("fastapi_mcp.server.logger.warning") as mock_warning:
-        # Call the warning method
-        mcp_server._warn_if_too_many_tools()
-        
-        # Check that warning was not called
-        mock_warning.assert_not_called()
+    @app.put("/items/{item_id}", operation_id="update_item")
+    async def update_item(item_id: int, item: dict):
+        return {"id": item_id, **item}
+    
+    @app.delete("/items/{item_id}", operation_id="delete_item")
+    async def delete_item(item_id: int):
+        return {"message": f"Item {item_id} deleted"}
+    
+    return app
 
 
-def test_warn_if_non_get_endpoints():
-    """Test that a warning is issued when there are non-GET endpoints."""
-    # Create a simple app
-    app = FastAPI()
+@pytest.fixture
+def app_with_auto_generated_ids():
+    """Create a FastAPI app with auto-generated operation IDs to trigger the warning."""
+    app = FastAPI(
+        title="App with Auto-generated IDs",
+        description="An app with auto-generated operation IDs to test warnings",
+    )
     
-    # Create FastApiMCP instance
-    mcp_server = FastApiMCP(app)
-    
-    # Set up operation_map with non-GET methods
-    mcp_server.operation_map = {
-        "create_item": {"method": "post", "path": "/items"},
-        "update_item": {"method": "put", "path": "/items/{id}"},
-        "delete_item": {"method": "delete", "path": "/items/{id}"},
-    }
-    
-    # Patch the logger.warning method
-    with patch("fastapi_mcp.server.logger.warning") as mock_warning:
-        # Call the warning method
-        mcp_server._warn_if_non_get_endpoints()
-        
-        # Check that warning was called with the correct message
-        mock_warning.assert_called_once()
-        warning_msg = mock_warning.call_args[0][0]
-        assert "Non-GET endpoints exposed as tools:" in warning_msg
-        for tool in ["create_item (POST)", "update_item (PUT)", "delete_item (DELETE)"]:
-            assert tool in warning_msg
-        assert "To disable this warning" in warning_msg
-
-
-def test_warn_if_non_get_endpoints_no_warning():
-    """Test that no warning is issued when there are no non-GET endpoints."""
-    # Create a simple app
-    app = FastAPI()
-    
-    # Create FastApiMCP instance
-    mcp_server = FastApiMCP(app)
-    
-    # Set up operation_map with only GET methods
-    mcp_server.operation_map = {
-        "get_items": {"method": "get", "path": "/items"},
-        "get_item": {"method": "get", "path": "/items/{id}"},
-    }
-    
-    # Patch the logger.warning method
-    with patch("fastapi_mcp.server.logger.warning") as mock_warning:
-        # Call the warning method
-        mcp_server._warn_if_non_get_endpoints()
-        
-        # Check that warning was not called
-        mock_warning.assert_not_called()
-
-
-def test_warn_if_auto_generated_operation_ids():
-    """Test that warnings are issued for auto-generated operation IDs by examining
-    actual FastAPI routes with and without explicit operation_ids."""
-    # Create a FastAPI app with routes that have auto-generated and explicit operation_ids
-    app = FastAPI()
-    
-    # Route with auto-generated operation_id (no explicit operation_id provided)
+    # Routes with auto-generated operation IDs (no explicit operation_id provided)
     @app.get("/auto-generated")
     async def auto_generated_route():
         return {"message": "Auto-generated operation_id"}
     
-    # Route with another auto-generated operation_id pattern
     @app.get("/auto-generated-2")
     async def auto_generated_route_get():
         return {"message": "Another auto-generated operation_id"}
@@ -131,206 +69,162 @@ def test_warn_if_auto_generated_operation_ids():
     @app.get("/explicit", operation_id="explicit_operation_id")
     async def explicit_route():
         return {"message": "Explicit operation_id"}
-        
-    # Create FastApiMCP instance which will analyze the routes
-    mcp_server = FastApiMCP(app)
     
-    # Set up the tools that would have been created during setup
-    # We need to ensure tools list has correct auto-generated operation IDs
-    # that don't match the explicit_operation_ids we'll define below
-    mcp_server.tools = [
-        types.Tool(
-            name="auto_generated_route",
-            description="Auto-generated route",
-            inputSchema={"type": "object", "properties": {}}
-        ),
-        types.Tool(
-            name="auto_generated_route_get",
-            description="Another auto-generated route",
-            inputSchema={"type": "object", "properties": {}}
-        ),
-        types.Tool(
-            name="explicit_operation_id",
-            description="Explicit route",
-            inputSchema={"type": "object", "properties": {}}
-        )
-    ]
-    
-    # Patch the logger.warning method
-    with patch("fastapi_mcp.server.logger.warning") as mock_warning:
-        # Call the warning method
-        mcp_server._warn_if_auto_generated_operation_ids()
-        
-        # We expect warnings for auto-generated routes but not for explicit ones
-        # We should have exactly 2 warnings (for the 2 auto-generated routes)
-        assert mock_warning.call_count == 2
-        
-        # Verify the warning messages
-        warnings = [call[0][0] for call in mock_warning.call_args_list]
-        
-        # The exact auto-generated names might vary based on FastAPI's implementation
-        # but should include the function names
-        assert any("auto_generated_route" in warning for warning in warnings)
-        assert any("auto_generated_route_get" in warning for warning in warnings)
-        assert not any("explicit_operation_id" in warning for warning in warnings)
-        assert all("To disable this warning" in warning for warning in warnings)
+    return app
 
 
-def test_warn_if_auto_generated_operation_ids_no_warning():
-    """Test that no warnings are issued when all routes have explicit operation IDs."""
-    # Create a simple app
-    app = FastAPI()
+def test_warn_if_too_many_tools(app_with_too_many_tools, caplog):
+    """Test that a warning is issued when there are too many tools."""
+    # Set up logging capture
+    caplog.set_level(logging.WARNING)
     
-    # Create FastApiMCP instance with disable_warnings=True to guarantee no warnings
-    mcp_server = FastApiMCP(app, disable_warnings=True)
+    # Create FastApiMCP instance
+    _ = FastApiMCP(app_with_too_many_tools)
     
-    # Create tools with explicit operation IDs (doesn't matter for this test since we use disable_warnings)
-    mcp_server.tools = [
-        types.Tool(
-            name="explicit_operation_id",
-            description="Explicit route",
-            inputSchema={"type": "object", "properties": {}}
-        )
-    ]
-    
-    # Patch the logger.warning method
-    with patch("fastapi_mcp.server.logger.warning") as mock_warning:
-        # Call the warning method
-        mcp_server._warn_if_auto_generated_operation_ids()
-        
-        # No warnings should be issued because we disabled warnings
-        mock_warning.assert_not_called()
+    # Check that warning was logged
+    assert any("More than 10 tools exposed" in record.message for record in caplog.records)
+    assert any("To disable this warning" in record.message for record in caplog.records)
 
 
-def test_disable_all_warnings():
-    """Test that all warnings can be disabled via the disable_warnings parameter."""
-    # Create a simple app
-    app = FastAPI()
+def test_warn_if_too_many_tools_no_warning(app_with_too_many_tools, caplog):
+    """Test that no warning is issued when disable_warnings=True."""
+    # Set up logging capture
+    caplog.set_level(logging.WARNING)
     
     # Create FastApiMCP instance with warnings disabled
-    mcp_server = FastApiMCP(app, disable_warnings=True)
+    _ = FastApiMCP(app_with_too_many_tools, disable_warnings=True)
     
-    # Setup data that would trigger warnings
-    mcp_server.tools = [
-        types.Tool(
-            name=f"tool_{i}", 
-            description="A test tool",
-            inputSchema={"type": "object", "properties": {}, "title": f"Tool{i}Arguments"}
-        ) for i in range(11)
-    ]
-    mcp_server.tools.append(
-        types.Tool(
-            name="items__get", 
-            description="Double underscore",
-            inputSchema={"type": "object", "properties": {}, "title": "Items__getArguments"}
-        )
-    )
-    mcp_server.operation_map = {
-        "create_item": {"method": "post", "path": "/items"},
-        "update_item": {"method": "put", "path": "/items/{id}"}
-    }
-    
-    # Patch the logger.warning method
-    with patch("fastapi_mcp.server.logger.warning") as mock_warning:
-        # Call all warning methods
-        mcp_server._warn_if_too_many_tools()
-        mcp_server._warn_if_non_get_endpoints()
-        mcp_server._warn_if_auto_generated_operation_ids()
-        
-        # Check that no warnings were issued
-        mock_warning.assert_not_called()
+    # Check that no warning was logged
+    assert not any("More than 10 tools exposed" in record.message for record in caplog.records)
 
 
-def test_integration_all_warnings():
+def test_warn_if_non_get_endpoints(app_with_non_get_endpoints, caplog):
+    """Test that a warning is issued when there are non-GET endpoints."""
+    # Set up logging capture
+    caplog.set_level(logging.WARNING)
+    
+    # Create FastApiMCP instance
+    _ = FastApiMCP(app_with_non_get_endpoints)
+    
+    # Check that warning was logged
+    assert any("Non-GET endpoints exposed as tools" in record.message for record in caplog.records)
+    assert any("create_item (POST)" in record.message for record in caplog.records)
+    assert any("update_item (PUT)" in record.message for record in caplog.records)
+    assert any("delete_item (DELETE)" in record.message for record in caplog.records)
+    assert any("To disable this warning" in record.message for record in caplog.records)
+
+
+def test_warn_if_non_get_endpoints_no_warning(app_with_non_get_endpoints, caplog):
+    """Test that no warning is issued when disable_warnings=True."""
+    # Set up logging capture
+    caplog.set_level(logging.WARNING)
+    
+    # Create FastApiMCP instance with warnings disabled
+    _ = FastApiMCP(app_with_non_get_endpoints, disable_warnings=True)
+    
+    # Check that no warning was logged
+    assert not any("Non-GET endpoints exposed as tools" in record.message for record in caplog.records)
+
+
+def test_warn_if_auto_generated_operation_ids(app_with_auto_generated_ids, caplog):
+    """Test that warnings are issued for auto-generated operation IDs."""
+    # Set up logging capture
+    caplog.set_level(logging.WARNING)
+    
+    # Create FastApiMCP instance
+    _ = FastApiMCP(app_with_auto_generated_ids)
+    
+    # Check that warning was logged for auto-generated IDs but not for explicit ones
+    assert any("auto_generated_route" in record.message for record in caplog.records)
+    assert any("auto_generated_route_get" in record.message for record in caplog.records)
+    assert not any("explicit_operation_id" in record.message for record in caplog.records)
+    assert any("To disable this warning" in record.message for record in caplog.records)
+
+
+def test_warn_if_auto_generated_operation_ids_no_warning(app_with_auto_generated_ids, caplog):
+    """Test that no warning is issued when disable_warnings=True."""
+    # Set up logging capture
+    caplog.set_level(logging.WARNING)
+    
+    # Create FastApiMCP instance with warnings disabled
+    _ = FastApiMCP(app_with_auto_generated_ids, disable_warnings=True)
+    
+    # Check that no warning was logged
+    assert not any("auto_generated_route" in record.message for record in caplog.records)
+    assert not any("auto_generated_route_get" in record.message for record in caplog.records)
+
+
+def test_disable_all_warnings(app_with_too_many_tools, caplog):
+    """Test that all warnings can be disabled via the disable_warnings parameter."""
+    # Set up logging capture
+    caplog.set_level(logging.WARNING)
+    
+    # Create FastApiMCP instance with warnings disabled
+    _ = FastApiMCP(app_with_too_many_tools, disable_warnings=True)
+    
+    # Check that no warnings were logged
+    assert not any("More than 10 tools exposed" in record.message for record in caplog.records)
+    assert not any("Non-GET endpoints exposed as tools" in record.message for record in caplog.records)
+    assert not any("auto_generated_route" in record.message for record in caplog.records)
+
+
+def test_integration_all_warnings(caplog):
     """Test that all warnings are issued during server setup when needed."""
-    # Create a FastAPI app with routes that trigger all warnings
+    # Set up logging capture
+    caplog.set_level(logging.WARNING)
+    
+    # Create a FastAPI app with all warning scenarios
     app = FastAPI()
     router = APIRouter()
     
-    # Create routes with auto-generated IDs and non-GET methods
+    # Auto-generated operation IDs
     @router.get("/items/")
-    async def items__get():
+    async def get_items():
         return {"items": []}
     
+    # Non-GET endpoint
     @router.post("/items/")
-    async def items__post():
+    async def create_item():
         return {"message": "Item created"}
-        
+    
     # Add enough routes to trigger the "too many tools" warning
     for i in range(10):
         @router.get(f"/other-route-{i}/")
-        async def other_route():
+        async def other_route_get():
             return {"message": "OK"}
     
     app.include_router(router)
     
-    # Replace the warning methods with mocks
-    with patch.object(FastApiMCP, '_warn_if_too_many_tools') as mock_too_many_tools, \
-         patch.object(FastApiMCP, '_warn_if_non_get_endpoints') as mock_non_get_endpoints, \
-         patch.object(FastApiMCP, '_warn_if_auto_generated_operation_ids') as mock_auto_gen_ids:
-        
-        # Create FastApiMCP instance which will trigger setup_server method
-        FastApiMCP(app)
-        
-        # Verify that each warning method was called once
-        mock_too_many_tools.assert_called_once()
-        mock_non_get_endpoints.assert_called_once()
-        mock_auto_gen_ids.assert_called_once()
+    # Create FastApiMCP instance
+    _ = FastApiMCP(app)
+    
+    # Check that all warnings were logged
+    assert any("More than 10 tools exposed" in record.message for record in caplog.records)
+    assert any("Non-GET endpoints exposed as tools" in record.message for record in caplog.records)
+    assert any("create_item_items__post (POST)" in record.message for record in caplog.records)
+    assert any("appears to have an auto-generated operation_id" in record.message for record in caplog.records)
 
 
-def test_integration_warnings_disabled():
+def test_integration_warnings_disabled(caplog):
     """Test that warnings are not issued during server setup when disable_warnings=True."""
-    # Create a FastAPI app with routes that would normally trigger warnings
-    app = FastAPI()
-    router = APIRouter()
+    # Set up logging capture
+    caplog.set_level(logging.WARNING)
     
-    # Create routes with auto-generated IDs and non-GET methods
-    @router.get("/items/")
-    async def items__get():
-        return {"items": []}
-    
-    @router.post("/items/")
-    async def items__post():
-        return {"message": "Item created"}
-    
-    app.include_router(router)
-    
-    # Patch the logger.warning method
-    with patch("fastapi_mcp.server.logger.warning") as mock_warning:
-        # Create FastApiMCP instance with warnings disabled
-        FastApiMCP(app, disable_warnings=True)
-        
-        # Check that no warnings were issued
-        mock_warning.assert_not_called()
-
-
-def test_integration_warning_methods_during_setup():
-    """Test that the warning methods are called during server setup."""
-    # Create a FastAPI app with minimum configuration to trigger warnings
+    # Create a FastAPI app with all warning scenarios
     app = FastAPI()
     
+    # Auto-generated operation ID
     @app.get("/items/")
-    async def items__get():
+    async def get_items():
         return {"items": []}
     
+    # Non-GET endpoint
     @app.post("/items/")
-    async def items__post():
+    async def create_item():
         return {"message": "Item created"}
     
-    # Create mocks for each warning method
-    too_many_spy = Mock()
-    non_get_spy = Mock()
-    auto_gen_spy = Mock()
+    # Create FastApiMCP instance with warnings disabled
+    _ = FastApiMCP(app, disable_warnings=True)
     
-    # Patch the methods to use our spies
-    with patch.object(FastApiMCP, '_warn_if_too_many_tools', too_many_spy), \
-         patch.object(FastApiMCP, '_warn_if_non_get_endpoints', non_get_spy), \
-         patch.object(FastApiMCP, '_warn_if_auto_generated_operation_ids', auto_gen_spy):
-        
-        # Create FastApiMCP instance which will trigger the setup_server method
-        FastApiMCP(app)
-        
-        # Verify that each method was called once
-        too_many_spy.assert_called_once()
-        non_get_spy.assert_called_once()
-        auto_gen_spy.assert_called_once() 
+    # Check that no warnings were logged
+    assert len(caplog.records) == 0 
