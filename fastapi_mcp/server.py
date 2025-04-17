@@ -118,20 +118,6 @@ class FastApiMCP:
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
 
-        # Determine base URL if not provided
-        if not self._base_url:
-            # Try to determine the base URL from FastAPI config
-            if hasattr(self.fastapi, "root_path") and self.fastapi.root_path:
-                self._base_url = self.fastapi.root_path
-            else:
-                # Default to localhost with FastAPI default port
-                port = 8000
-                for route in self.fastapi.routes:
-                    if hasattr(route, "app") and hasattr(route.app, "port"):
-                        port = route.app.port
-                        break
-                self._base_url = f"http://localhost:{port}"
-
         # Normalize base URL
         if self._base_url.endswith("/"):
             self._base_url = self._base_url[:-1]
