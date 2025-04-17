@@ -1,5 +1,10 @@
 """
 This example shows how to customize exposing endpoints by filtering operation IDs and tags.
+Notes on filtering:
+- You cannot use both `include_operations` and `exclude_operations` at the same time
+- You cannot use both `include_tags` and `exclude_tags` at the same time
+- You can combine operation filtering with tag filtering (e.g., use `include_operations` with `include_tags`)
+- When combining filters, a greedy approach will be taken. Endpoints matching either criteria will be included
 """
 from examples.shared.apps.items import app
 from examples.shared.setup import setup_logging
