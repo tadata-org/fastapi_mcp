@@ -1,5 +1,5 @@
 from uuid import UUID
-from logging import getLogger
+import logging
 from typing import Union
 
 from anyio.streams.memory import MemoryObjectSendStream
@@ -10,7 +10,7 @@ from mcp.server.sse import SseServerTransport
 from mcp.types import JSONRPCMessage, JSONRPCError, ErrorData
 
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class FastApiSseTransport(SseServerTransport):

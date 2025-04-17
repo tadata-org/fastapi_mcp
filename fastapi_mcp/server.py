@@ -1,6 +1,7 @@
 import json
 import httpx
 from typing import Dict, Optional, Any, List, Union
+from typing_extensions import Annotated, Doc
 
 from fastapi import FastAPI, Request, APIRouter
 from fastapi.openapi.utils import get_openapi
@@ -9,12 +10,11 @@ import mcp.types as types
 
 from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
 from fastapi_mcp.transport.sse import FastApiSseTransport
-from fastapi_mcp.types import AsyncClientProtocol
 
-from logging import getLogger
+import logging
 
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class FastApiMCP:
@@ -23,10 +23,26 @@ class FastApiMCP:
         fastapi: FastAPI,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        base_url: Optional[str] = None,
+        base_url: Annotated[
+            Optional[str],
+            Doc(
+                """
+                Optionally specify an explicit base URL for the API server.
+                This is only needed if FastApiMCP is deployed or mounted separately from the FastAPI app.
+                """
+            ),
+        ] = None,
         describe_all_responses: bool = False,
         describe_full_response_schema: bool = False,
-        http_client: Optional[AsyncClientProtocol] = None,
+        http_client: Annotated[
+            Optional[httpx.AsyncClient],
+            Doc(
+                """
+                Optional custom HTTP client to use for API calls to the FastAPI app.
+                Has to be an instance of `httpx.AsyncClient`.
+                """
+            ),
+        ] = None,
         include_operations: Optional[List[str]] = None,
         exclude_operations: Optional[List[str]] = None,
         include_tags: Optional[List[str]] = None,
@@ -66,7 +82,7 @@ class FastApiMCP:
         self.name = name or self.fastapi.title or "FastAPI MCP"
         self.description = description or self.fastapi.description
 
-        self._base_url = base_url
+        self._base_url = base_url or "http://apiserver"
         self._describe_all_responses = describe_all_responses
         self._describe_full_response_schema = describe_full_response_schema
         self._include_operations = include_operations
@@ -74,7 +90,11 @@ class FastApiMCP:
         self._include_tags = include_tags
         self._exclude_tags = exclude_tags
 
-        self._http_client = http_client or httpx.AsyncClient()
+        self._http_client = http_client or httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=self.fastapi, raise_app_exceptions=False),
+            base_url=self._base_url,
+            timeout=10.0,
+        )
 
         self.setup_server()
 
@@ -131,7 +151,6 @@ class FastApiMCP:
         ) -> List[Union[types.TextContent, types.ImageContent, types.EmbeddedResource]]:
             return await self._execute_api_tool(
                 client=self._http_client,
-                base_url=self._base_url or "",
                 tool_name=name,
                 arguments=arguments,
                 operation_map=self.operation_map,
@@ -139,16 +158,31 @@ class FastApiMCP:
 
         self.server = mcp_server
 
-    def mount(self, router: Optional[FastAPI | APIRouter] = None, mount_path: str = "/mcp") -> None:
+    def mount(
+        self,
+        router: Annotated[
+            Optional[FastAPI | APIRouter],
+            Doc(
+                """
+                The FastAPI app or APIRouter to mount the MCP server to. If not provided, the MCP
+                server will be mounted to the FastAPI app.
+                """
+            ),
+        ] = None,
+        mount_path: Annotated[
+            str,
+            Doc(
+                """
+                Path where the MCP server will be mounted
+                """
+            ),
+        ] = "/mcp",
+    ) -> None:
         """
         Mount the MCP server to **any** FastAPI app or APIRouter.
+
         There is no requirement that the FastAPI app or APIRouter is the same as the one that the MCP
         server was created from.
-
-        Args:
-            router: The FastAPI app or APIRouter to mount the MCP server to. If not provided, the MCP
-                    server will be mounted to the FastAPI app.
-            mount_path: Path where the MCP server will be mounted
         """
         # Normalize mount path
         if not mount_path.startswith("/"):
@@ -179,6 +213,7 @@ class FastApiMCP:
                     reader,
                     writer,
                     self.server.create_initialization_options(notification_options=None, experimental_capabilities={}),
+                    raise_exceptions=False,
                 )
 
         # Route for MCP messages
@@ -198,8 +233,7 @@ class FastApiMCP:
 
     async def _execute_api_tool(
         self,
-        client: AsyncClientProtocol,
-        base_url: str,
+        client: httpx.AsyncClient,
         tool_name: str,
         arguments: Dict[str, Any],
         operation_map: Dict[str, Dict[str, Any]],
@@ -226,13 +260,12 @@ class FastApiMCP:
         parameters: List[Dict[str, Any]] = operation.get("parameters", [])
         arguments = arguments.copy() if arguments else {}  # Deep copy arguments to avoid mutating the original
 
-        url = f"{base_url}{path}"
         for param in parameters:
             if param.get("in") == "path" and param.get("name") in arguments:
                 param_name = param.get("name", None)
                 if param_name is None:
                     raise ValueError(f"Parameter name is None for parameter: {param}")
-                url = url.replace(f"{{{param_name}}}", str(arguments.pop(param_name)))
+                path = path.replace(f"{{{param_name}}}", str(arguments.pop(param_name)))
 
         query = {}
         for param in parameters:
@@ -253,8 +286,8 @@ class FastApiMCP:
         body = arguments if arguments else None
 
         try:
-            logger.debug(f"Making {method.upper()} request to {url}")
-            response = await self._request(client, method, url, query, headers, body)
+            logger.debug(f"Making {method.upper()} request to {path}")
+            response = await self._request(client, method, path, query, headers, body)
 
             # TODO: Better typing for the AsyncClientProtocol. It should return a ResponseProtocol that has a json() method that returns a dict/list/etc.
             try:
@@ -284,24 +317,23 @@ class FastApiMCP:
 
     async def _request(
         self,
-        client: AsyncClientProtocol,
+        client: httpx.AsyncClient,
         method: str,
-        url: str,
+        path: str,
         query: Dict[str, Any],
         headers: Dict[str, str],
         body: Optional[Any],
     ) -> Any:
-        """Helper method to make the actual HTTP request"""
         if method.lower() == "get":
-            return await client.get(url, params=query, headers=headers)
+            return await client.get(path, params=query, headers=headers)
         elif method.lower() == "post":
-            return await client.post(url, params=query, headers=headers, json=body)
+            return await client.post(path, params=query, headers=headers, json=body)
         elif method.lower() == "put":
-            return await client.put(url, params=query, headers=headers, json=body)
+            return await client.put(path, params=query, headers=headers, json=body)
         elif method.lower() == "delete":
-            return await client.delete(url, params=query, headers=headers)
+            return await client.delete(path, params=query, headers=headers)
         elif method.lower() == "patch":
-            return await client.patch(url, params=query, headers=headers, json=body)
+            return await client.patch(path, params=query, headers=headers, json=body)
         else:
             raise ValueError(f"Unsupported HTTP method: {method}")
 

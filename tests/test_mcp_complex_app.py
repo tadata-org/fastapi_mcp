@@ -7,7 +7,6 @@ from mcp.shared.memory import create_connected_server_and_client_session
 from fastapi import FastAPI
 
 from fastapi_mcp import FastApiMCP
-from fastapi_mcp.utils.testing import FastAPITestClient
 
 from .fixtures.types import Product, Customer, OrderResponse
 
@@ -18,8 +17,6 @@ def lowlevel_server_complex_app(complex_fastapi_app: FastAPI) -> Server:
         complex_fastapi_app,
         name="Test MCP Server",
         description="Test description",
-        base_url="",
-        http_client=FastAPITestClient(complex_fastapi_app),
     )
     return mcp.server
 

@@ -48,22 +48,13 @@ from fastapi_mcp import FastApiMCP
 
 app = FastAPI()
 
-mcp = FastApiMCP(
-    app,
-
-    # Optional parameters
-    name="My API MCP",
-    description="My API description",
-    base_url="http://localhost:8000",
-)
+mcp = FastApiMCP(app)
 
 # Mount the MCP server directly to your FastAPI app
 mcp.mount()
 ```
 
 That's it! Your auto-generated MCP server is now available at `https://app.base.url/mcp`.
-
-> **Note on `base_url`**: While `base_url` is optional, it is highly recommended to provide it explicitly. The `base_url` tells the MCP server where to send API requests when tools are called. Without it, the library will attempt to determine the URL automatically, which may not work correctly in deployed environments where the internal and external URLs differ.
 
 ## Tool Naming
 
@@ -102,7 +93,6 @@ app = FastAPI()
 mcp = FastApiMCP(
     app,
     name="My API MCP",
-    base_url="http://localhost:8000",
     describe_all_responses=True,     # Include all possible response schemas in tool descriptions
     describe_full_response_schema=True  # Include full JSON schema in tool descriptions
 )
@@ -178,10 +168,7 @@ api_app = FastAPI()
 mcp_app = FastAPI()
 
 # Create MCP server from the API app
-mcp = FastApiMCP(
-    api_app,
-    base_url="http://api-host:8001",  # The URL where the API app will be running
-)
+mcp = FastApiMCP(api_app)
 
 # Mount the MCP server to the separate app
 mcp.mount(mcp_app)
