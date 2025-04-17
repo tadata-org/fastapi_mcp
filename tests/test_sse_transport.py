@@ -2,6 +2,12 @@ import anyio
 import multiprocessing
 import socket
 import time
+import os
+import signal
+import atexit
+import sys
+import threading
+import coverage
 from typing import AsyncGenerator, Generator
 from mcp.client.session import ClientSession
 from mcp.client.sse import sse_client
@@ -32,6 +38,40 @@ def server_url(server_port: int) -> str:
 
 
 def run_server(server_port: int) -> None:
+    # Initialize coverage for subprocesses
+    cov = None
+    if "COVERAGE_PROCESS_START" in os.environ:
+        cov = coverage.Coverage(source=["fastapi_mcp"])
+        cov.start()
+
+        # Create a function to save coverage data at exit
+        def cleanup():
+            if cov:
+                cov.stop()
+                cov.save()
+
+        # Register multiple cleanup mechanisms to ensure coverage data is saved
+        atexit.register(cleanup)
+
+        # Setup signal handler for clean termination
+        def handle_signal(signum, frame):
+            cleanup()
+            sys.exit(0)
+
+        signal.signal(signal.SIGTERM, handle_signal)
+
+        # Backup thread to ensure coverage is written if process is terminated abruptly
+        def periodic_save():
+            while True:
+                time.sleep(1.0)
+                if cov:
+                    cov.save()
+
+        save_thread = threading.Thread(target=periodic_save)
+        save_thread.daemon = True
+        save_thread.start()
+
+    # Configure the server
     fastapi = make_simple_fastapi_app()
     mcp = FastApiMCP(
         fastapi,
@@ -40,6 +80,7 @@ def run_server(server_port: int) -> None:
     )
     mcp.mount()
 
+    # Start the server
     server = uvicorn.Server(config=uvicorn.Config(app=fastapi, host=HOST, port=server_port, log_level="error"))
     server.run()
 
@@ -47,9 +88,18 @@ def run_server(server_port: int) -> None:
     while not server.started:
         time.sleep(0.5)
 
+    # Ensure coverage is saved if exiting the normal way
+    if cov:
+        cov.stop()
+        cov.save()
+
 
 @pytest.fixture()
 def server(server_port: int) -> Generator[None, None, None]:
+    # Ensure COVERAGE_PROCESS_START is set in the environment for subprocesses
+    coverage_rc = os.path.abspath(".coveragerc")
+    os.environ["COVERAGE_PROCESS_START"] = coverage_rc
+
     proc = multiprocessing.Process(target=run_server, kwargs={"server_port": server_port}, daemon=True)
     proc.start()
 
@@ -69,11 +119,18 @@ def server(server_port: int) -> Generator[None, None, None]:
 
     yield
 
-    # Signal the server to stop
-    proc.kill()
-    proc.join(timeout=2)
+    # Signal the server to stop - added graceful shutdown before kill
+    try:
+        proc.terminate()
+        proc.join(timeout=2)
+    except (OSError, AttributeError):
+        pass
+
     if proc.is_alive():
-        raise RuntimeError("server process failed to terminate")
+        proc.kill()
+        proc.join(timeout=2)
+        if proc.is_alive():
+            raise RuntimeError("server process failed to terminate")
 
 
 @pytest.fixture()
