@@ -12,13 +12,19 @@ from .fixtures.types import Product, Customer, OrderResponse
 
 
 @pytest.fixture
-def lowlevel_server_complex_app(complex_fastapi_app: FastAPI) -> Server:
+def fastapi_mcp(complex_fastapi_app: FastAPI) -> FastApiMCP:
     mcp = FastApiMCP(
         complex_fastapi_app,
         name="Test MCP Server",
         description="Test description",
     )
-    return mcp.server
+    mcp.mount()
+    return mcp
+
+
+@pytest.fixture
+def lowlevel_server_complex_app(fastapi_mcp: FastApiMCP) -> Server:
+    return fastapi_mcp.server
 
 
 @pytest.mark.asyncio
