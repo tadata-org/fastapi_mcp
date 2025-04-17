@@ -1,6 +1,6 @@
 <p align="center"><a href="https://github.com/tadata-org/fastapi_mcp"><img src="https://github.com/user-attachments/assets/609d5b8b-37a1-42c4-87e2-f045b60026b1" alt="fastapi-to-mcp" height="100"/></a></p>
 <h1 align="center">FastAPI-MCP</h1>
-<p align="center">一个零配置工具，用于自动将FastAPI端点暴露为模型上下文协议（MCP）工具。</p>
+<p align="center">一个零配置工具，用于自动将FastAPI端点公开为模型上下文协议（MCP）工具。</p>
 <div align="center">
 
 [![PyPI version](https://badge.fury.io/py/fastapi-mcp.svg)](https://pypi.org/project/fastapi-mcp/)
