@@ -17,7 +17,6 @@ mcp = FastApiMCP(
     app,
     name="Item API MCP",
     description="MCP server for the Item API",
-    base_url="http://localhost:8000",
 )
 
 # Mount the MCP server to a specific router.

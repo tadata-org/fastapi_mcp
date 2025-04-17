@@ -23,15 +23,6 @@ class FastApiMCP:
         fastapi: FastAPI,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        base_url: Annotated[
-            Optional[str],
-            Doc(
-                """
-                Optionally specify an explicit base URL for the API server.
-                This is only needed if FastApiMCP is deployed or mounted separately from the FastAPI app.
-                """
-            ),
-        ] = None,
         describe_all_responses: bool = False,
         describe_full_response_schema: bool = False,
         http_client: Annotated[
@@ -55,13 +46,8 @@ class FastApiMCP:
             fastapi: The FastAPI application
             name: Name for the MCP server (defaults to app.title)
             description: Description for the MCP server (defaults to app.description)
-            base_url: Base URL for API requests. If not provided, the base URL will be determined from the
-                FastAPI app's root path. Although optional, it is highly recommended to provide a base URL,
-                as the root path would be different when the app is deployed.
             describe_all_responses: Whether to include all possible response schemas in tool descriptions
             describe_full_response_schema: Whether to include full json schema for responses in tool descriptions
-            http_client: Optional HTTP client to use for API calls. If not provided, a new httpx.AsyncClient will be created.
-                This is primarily for testing purposes.
             include_operations: List of operation IDs to include as MCP tools. Cannot be used with exclude_operations.
             exclude_operations: List of operation IDs to exclude from MCP tools. Cannot be used with include_operations.
             include_tags: List of tags to include as MCP tools. Cannot be used with exclude_tags.
@@ -82,7 +68,7 @@ class FastApiMCP:
         self.name = name or self.fastapi.title or "FastAPI MCP"
         self.description = description or self.fastapi.description
 
-        self._base_url = base_url or "http://apiserver"
+        self._base_url = "http://apiserver"
         self._describe_all_responses = describe_all_responses
         self._describe_full_response_schema = describe_full_response_schema
         self._include_operations = include_operations
@@ -117,10 +103,6 @@ class FastApiMCP:
 
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
-
-        # Normalize base URL
-        if self._base_url.endswith("/"):
-            self._base_url = self._base_url[:-1]
 
         # Create the MCP lowlevel server
         mcp_server: Server = Server(self.name, self.description)
@@ -228,7 +210,6 @@ class FastApiMCP:
         Execute an MCP tool by making an HTTP request to the corresponding API endpoint.
 
         Args:
-            base_url: The base URL for the API
             tool_name: The name of the tool to execute
             arguments: The arguments for the tool
             operation_map: A mapping from tool names to operation details

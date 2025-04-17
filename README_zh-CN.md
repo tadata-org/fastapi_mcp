@@ -47,22 +47,13 @@ from fastapi_mcp import FastApiMCP
 
 app = FastAPI()
 
-mcp = FastApiMCP(
-    app,
-
-    # 可选参数
-    name="我的 API MCP",
-    description="我的 API 描述",
-    base_url="http://localhost:8000",
-)
+mcp = FastApiMCP(app)
 
 # 直接将 MCP 服务器挂载到您的 FastAPI 应用
 mcp.mount()
 ```
 
 就是这样！您的自动生成的 MCP 服务器现在可以在 `https://app.base.url/mcp` 访问。
-
-> **关于`base_url`的注意事项**：虽然`base_url`是可选的，但强烈建议您明确提供它。`base_url` 告诉 MCP 服务器在调用工具时向何处发送 API 请求。如果不提供，库将尝试自动确定 URL，这在部署环境中内部和外部 URL 不同时可能无法正确工作。
 
 ## 工具命名
 
@@ -101,7 +92,6 @@ app = FastAPI()
 mcp = FastApiMCP(
     app,
     name="我的 API MCP",
-    base_url="http://localhost:8000",
     describe_all_responses=True,     # 在工具描述中包含所有可能的响应模式
     describe_full_response_schema=True  # 在工具描述中包含完整的 JSON 模式
 )
@@ -177,10 +167,7 @@ api_app = FastAPI()
 mcp_app = FastAPI()
 
 # 从 API 应用创建 MCP 服务器
-mcp = FastApiMCP(
-    api_app,
-    base_url="http://api-host:8001",  # API 应用将运行的 URL
-)
+mcp = FastApiMCP(api_app)
 
 # 将 MCP 服务器挂载到单独的应用
 mcp.mount(mcp_app)
