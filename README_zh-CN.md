@@ -1,7 +1,3 @@
-Below is the translated Chinese version of the provided README.md file. The original Markdown format is fully preserved, with all English text translated into Chinese while keeping code blocks, links, images, and other formatting unchanged.
-
----
-
 <p align="center"><a href="https://github.com/tadata-org/fastapi_mcp"><img src="https://github.com/user-attachments/assets/609d5b8b-37a1-42c4-87e2-f045b60026b1" alt="fastapi-to-mcp" height="100"/></a></p>
 <h1 align="center">FastAPI-MCP</h1>
 <p align="center">一个零配置工具，用于自动将FastAPI端点暴露为模型上下文协议（MCP）工具。</p>
@@ -286,7 +282,3 @@ mcp.setup_server()
 ## 许可证
 
 MIT许可证。版权所有 (c) 2024 Tadata Inc.
-
----
-
-This translation retains 100% of the original format, with all code blocks, links, and images unchanged, while translating the English text into fluent and accurate Chinese.
