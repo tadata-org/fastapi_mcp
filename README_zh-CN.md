@@ -31,7 +31,7 @@
 uv add fastapi-mcp
 ```
 
-或者，您可以使用pip安装：
+或者，您可以使用 pip 安装：
 
 ```bash
 pip install fastapi-mcp
@@ -62,7 +62,7 @@ mcp.mount()
 
 就是这样！您的自动生成的 MCP 服务器现在可以在 `https://app.base.url/mcp` 访问。
 
-> **关于`base_url`的注意事项**：虽然`base_url`是可选的，但强烈建议您明确提供它。`base_url` 告诉 MCP 服务器在调用工具时向何处发送 API 请求。如果不提供，库将尝试自动确定URL，这在部署环境中内部和外部 URL 不同时可能无法正确工作。
+> **关于`base_url`的注意事项**：虽然`base_url`是可选的，但强烈建议您明确提供它。`base_url` 告诉 MCP 服务器在调用工具时向何处发送 API 请求。如果不提供，库将尝试自动确定 URL，这在部署环境中内部和外部 URL 不同时可能无法正确工作。
 
 ## 工具命名
 
@@ -76,7 +76,7 @@ FastAPI-MCP 使用 FastAPI 路由中的`operation_id`作为 MCP 工具的名称�
 async def read_user(user_id: int):
     return {"user_id": user_id}
 
-# 显式operation_id（工具将被命名为 "get_user_info"）
+# 显式 operation_id（工具将被命名为 "get_user_info"）
 @app.get("/users/{user_id}", operation_id="get_user_info")
 async def read_user(user_id: int):
     return {"user_id": user_id}
@@ -84,7 +84,7 @@ async def read_user(user_id: int):
 
 为了获得更清晰、更直观的工具名称，我们建议在 FastAPI 路由定义中添加显式的`operation_id`参数。
 
-要了解更多信息，请阅读 FastAPI 官方文档中关于 [路径操作的高级配置](https://fastapi.tiangolo.com/advanced/path-operation-advanced-configuration/)的部分。
+要了解更多信息，请阅读 FastAPI 官方文档中关于 [路径操作的高级配置](https://fastapi.tiangolo.com/advanced/path-operation-advanced-configuration/) 的部分。
 
 ## 高级用法
 
@@ -179,7 +179,7 @@ mcp_app = FastAPI()
 # 从 API 应用创建 MCP 服务器
 mcp = FastApiMCP(
     api_app,
-    base_url="http://api-host:8001",  # API应用将运行的URL
+    base_url="http://api-host:8001",  # API 应用将运行的 URL
 )
 
 # 将 MCP 服务器挂载到单独的应用
