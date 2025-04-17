@@ -1,4 +1,4 @@
-<p align="center"><a href="https://github.com/tadata-org/fastapi_mcp"><img src="https://github.com/user-attachments/assets/609d5b8b-37a1-42c4-87e2-f045b60026b1" alt="fastapi-to-mcp" height="100"/></a></p>
+<p align="center"><a href="https://github.com/tadata-org/fastapi_mcp"><img src="https://github.com/user-attachments/assets/7e44e98b-a0ba-4aff-a68a-4ffee3a6189c" alt="fastapi-to-mcp" height=100/></a></p>
 <h1 align="center">FastAPI-MCP</h1>
 <p align="center">A zero-configuration tool for automatically exposing FastAPI endpoints as Model Context Protocol (MCP) tools.</p>
 <div align="center">
