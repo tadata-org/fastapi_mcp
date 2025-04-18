@@ -22,6 +22,7 @@
 - **保留模式** - 保留您的请求模型和响应模型的模式
 - **保留文档** - 保留所有端点的文档，就像在 Swagger 中一样
 - **灵活部署** - 将 MCP 服务器挂载到同一应用，或单独部署
+- **ASGI 传输** - 默认使用 FastAPI 的 ASGI 接口直接通信，提高效率
 
 ## 安装
 
@@ -199,6 +200,33 @@ async def new_endpoint():
 
 # 刷新 MCP 服务器以包含新端点
 mcp.setup_server()
+```
+
+### 与 FastAPI 应用的通信
+
+FastAPI-MCP 默认使用 ASGI 传输，这意味着它直接与您的 FastAPI 应用通信，而不需要发送 HTTP 请求。这样更高效，也不需要基础 URL。
+
+如果您需要指定自定义基础 URL 或使用不同的传输方法，您可以提供自己的 `httpx.AsyncClient`：
+
+```python
+import httpx
+from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
+
+app = FastAPI()
+
+# 使用带有特定基础 URL 的自定义 HTTP 客户端
+custom_client = httpx.AsyncClient(
+    base_url="https://api.example.com",
+    timeout=30.0
+)
+
+mcp = FastApiMCP(
+    app,
+    http_client=custom_client
+)
+
+mcp.mount()
 ```
 
 ## 示例

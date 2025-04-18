@@ -23,6 +23,7 @@
 - **Preserving schemas** of your request models and response models
 - **Preserve documentation** of all your endpoints, just as it is in Swagger
 - **Flexible deployment** - Mount your MCP server to the same app, or deploy separately
+- **ASGI transport** - Uses FastAPI's ASGI interface directly by default for efficient communication
 
 ## Installation
 
@@ -200,6 +201,35 @@ async def new_endpoint():
 
 # Refresh the MCP server to include the new endpoint
 mcp.setup_server()
+```
+
+### Communication with the FastAPI App
+
+FastAPI-MCP uses ASGI transport by default, which means it communicates directly with your FastAPI app without making HTTP requests. This is more efficient and doesn't require a base URL.
+
+It's not even necessary that the FastAPI server will run. See the examples folder for more.
+
+If you need to specify a custom base URL or use a different transport method, you can provide your own `httpx.AsyncClient`:
+
+```python
+import httpx
+from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
+
+app = FastAPI()
+
+# Use a custom HTTP client with a specific base URL
+custom_client = httpx.AsyncClient(
+    base_url="https://api.example.com",
+    timeout=30.0
+)
+
+mcp = FastApiMCP(
+    app,
+    http_client=custom_client
+)
+
+mcp.mount()
 ```
 
 ## Examples
