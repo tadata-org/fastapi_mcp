@@ -2,3 +2,15 @@
 omit =
     examples/*
     tests/*
+concurrency = multiprocessing
+parallel = true
+sigterm = true
+data_file = .coverage
+source = fastapi_mcp
+
+[report]
+show_missing = true
+
+[paths]
+source =
+    fastapi_mcp/

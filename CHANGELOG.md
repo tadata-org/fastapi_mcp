@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+🚀 FastApiMCP now works with ASGI-transport by default.
+
+This means the `base_url` argument is redundant, and thus has been removed.
+
+You can still set up an explicit base URL using the `http_client` argument, and injecting your own `httpx.AsyncClient` if necessary.
+
+### Removed
+- ⚠️ Breaking Change: Removed `base_url` argument since it's not used anymore by the MCP transport.
+
+### Fixed
+- 🐛 Fix short timeout issue (#71), increasing the default timeout to 10
+
+
 ## [0.2.0]
 
 ### Changed

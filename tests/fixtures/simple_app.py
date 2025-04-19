@@ -6,8 +6,7 @@ import pytest
 from .types import Item
 
 
-@pytest.fixture
-def simple_fastapi_app() -> FastAPI:
+def make_simple_fastapi_app() -> FastAPI:
     app = FastAPI(
         title="Test API",
         description="A test API app for unit testing",
@@ -66,3 +65,8 @@ def simple_fastapi_app() -> FastAPI:
         raise Exception("This is a test error")
 
     return app
+
+
+@pytest.fixture
+def simple_fastapi_app() -> FastAPI:
+    return make_simple_fastapi_app()

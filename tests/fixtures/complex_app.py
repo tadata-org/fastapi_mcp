@@ -8,7 +8,6 @@ from .types import (
     Product,
     Customer,
     OrderResponse,
-    Address,
     PaginatedResponse,
     ProductCategory,
     OrderRequest,
@@ -16,12 +15,10 @@ from .types import (
 )
 
 
-@pytest.fixture
-def complex_fastapi_app(
+def make_complex_fastapi_app(
     example_product: Product,
     example_customer: Customer,
     example_order_response: OrderResponse,
-    example_address: Address,
 ) -> FastAPI:
     app = FastAPI(
         title="Complex E-Commerce API",
@@ -129,3 +126,16 @@ def complex_fastapi_app(
         return customer_copy
 
     return app
+
+
+@pytest.fixture
+def complex_fastapi_app(
+    example_product: Product,
+    example_customer: Customer,
+    example_order_response: OrderResponse,
+) -> FastAPI:
+    return make_complex_fastapi_app(
+        example_product=example_product,
+        example_customer=example_customer,
+        example_order_response=example_order_response,
+    )

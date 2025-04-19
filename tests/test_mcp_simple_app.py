@@ -7,21 +7,24 @@ from mcp.shared.memory import create_connected_server_and_client_session
 from fastapi import FastAPI
 
 from fastapi_mcp import FastApiMCP
-from fastapi_mcp.utils.testing import FastAPITestClient
 
 from .fixtures.types import Item
 
 
 @pytest.fixture
-def lowlevel_server_simple_app(simple_fastapi_app: FastAPI) -> Server:
+def fastapi_mcp(simple_fastapi_app: FastAPI) -> FastApiMCP:
     mcp = FastApiMCP(
         simple_fastapi_app,
         name="Test MCP Server",
         description="Test description",
-        base_url="",
-        http_client=FastAPITestClient(simple_fastapi_app),
     )
-    return mcp.server
+    mcp.mount()
+    return mcp
+
+
+@pytest.fixture
+def lowlevel_server_simple_app(fastapi_mcp: FastApiMCP) -> Server:
+    return fastapi_mcp.server
 
 
 @pytest.mark.asyncio

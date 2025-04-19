@@ -13,10 +13,6 @@ def test_default_configuration(simple_fastapi_app: FastAPI):
     assert mcp_server.name == simple_fastapi_app.title
     assert mcp_server.description == simple_fastapi_app.description
 
-    # Check default base URL
-    assert mcp_server._base_url is not None
-    assert mcp_server._base_url.startswith("http://")
-
     # Check default options
     assert mcp_server._describe_all_responses is False
     assert mcp_server._describe_full_response_schema is False
@@ -27,13 +23,11 @@ def test_custom_configuration(simple_fastapi_app: FastAPI):
     # Create MCP server with custom options
     custom_name = "Custom MCP Server"
     custom_description = "A custom MCP server for testing"
-    custom_base_url = "https://custom-api.example.com"
 
     mcp_server = FastApiMCP(
         simple_fastapi_app,
         name=custom_name,
         description=custom_description,
-        base_url=custom_base_url,
         describe_all_responses=True,
         describe_full_response_schema=True,
     )
@@ -42,41 +36,19 @@ def test_custom_configuration(simple_fastapi_app: FastAPI):
     assert mcp_server.name == custom_name
     assert mcp_server.description == custom_description
 
-    # Check custom base URL
-    assert mcp_server._base_url == custom_base_url
-
     # Check custom options
     assert mcp_server._describe_all_responses is True
     assert mcp_server._describe_full_response_schema is True
-
-
-def test_base_url_normalization(simple_fastapi_app: FastAPI):
-    """Test that base URLs are normalized correctly."""
-    # Test with trailing slash
-    mcp_server1 = FastApiMCP(
-        simple_fastapi_app,
-        base_url="http://example.com/api/",
-    )
-    assert mcp_server1._base_url == "http://example.com/api"
-
-    # Test without trailing slash
-    mcp_server2 = FastApiMCP(
-        simple_fastapi_app,
-        base_url="http://example.com/api",
-    )
-    assert mcp_server2._base_url == "http://example.com/api"
 
 
 def test_describe_all_responses_config_simple_app(simple_fastapi_app: FastAPI):
     """Test the describe_all_responses behavior with the simple app."""
     mcp_default = FastApiMCP(
         simple_fastapi_app,
-        base_url="http://example.com",
     )
 
     mcp_all_responses = FastApiMCP(
         simple_fastapi_app,
-        base_url="http://example.com",
         describe_all_responses=True,
     )
 
@@ -136,7 +108,6 @@ def test_describe_full_response_schema_config_simple_app(simple_fastapi_app: Fas
 
     mcp_full_response_schema = FastApiMCP(
         simple_fastapi_app,
-        base_url="http://example.com",
         describe_full_response_schema=True,
     )
 
@@ -170,7 +141,6 @@ def test_describe_all_responses_and_full_response_schema_config_simple_app(simpl
 
     mcp_all_responses_and_full_response_schema = FastApiMCP(
         simple_fastapi_app,
-        base_url="http://example.com",
         describe_all_responses=True,
         describe_full_response_schema=True,
     )
@@ -208,12 +178,10 @@ def test_describe_all_responses_config_complex_app(complex_fastapi_app: FastAPI)
     """Test the describe_all_responses behavior with the complex app."""
     mcp_default = FastApiMCP(
         complex_fastapi_app,
-        base_url="http://example.com",
     )
 
     mcp_all_responses = FastApiMCP(
         complex_fastapi_app,
-        base_url="http://example.com",
         describe_all_responses=True,
     )
 
@@ -281,7 +249,6 @@ def test_describe_full_response_schema_config_complex_app(complex_fastapi_app: F
     """Test the describe_full_response_schema behavior with the complex app."""
     mcp_full_response_schema = FastApiMCP(
         complex_fastapi_app,
-        base_url="http://example.com",
         describe_full_response_schema=True,
     )
 
@@ -326,7 +293,6 @@ def test_describe_all_responses_and_full_response_schema_config_complex_app(comp
     """Test the describe_all_responses and describe_full_response_schema together with the complex app."""
     mcp_all_responses_and_full_schema = FastApiMCP(
         complex_fastapi_app,
-        base_url="http://example.com",
         describe_all_responses=True,
         describe_full_response_schema=True,
     )

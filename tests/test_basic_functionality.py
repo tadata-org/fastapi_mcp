@@ -10,13 +10,11 @@ def test_create_mcp_server(simple_fastapi_app: FastAPI):
         simple_fastapi_app,
         name="Test MCP Server",
         description="Test description",
-        base_url="http://localhost:8000",
     )
 
     # Verify the MCP server was created correctly
     assert mcp.name == "Test MCP Server"
     assert mcp.description == "Test description"
-    assert mcp._base_url == "http://localhost:8000"
     assert isinstance(mcp.server, Server)
     assert len(mcp.tools) > 0, "Should have extracted tools from the app"
     assert len(mcp.operation_map) > 0, "Should have operation mapping"
@@ -34,9 +32,6 @@ def test_default_values(simple_fastapi_app: FastAPI):
     # Verify default values
     assert mcp.name == simple_fastapi_app.title
     assert mcp.description == simple_fastapi_app.description
-
-    # Default base URL should be derived or defaulted
-    assert mcp._base_url is not None
 
     # Mount with default path
     mcp.mount()

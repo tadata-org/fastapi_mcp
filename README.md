@@ -23,6 +23,7 @@
 - **Preserving schemas** of your request models and response models
 - **Preserve documentation** of all your endpoints, just as it is in Swagger
 - **Flexible deployment** - Mount your MCP server to the same app, or deploy separately
+- **ASGI transport** - Uses FastAPI's ASGI interface directly by default for efficient communication
 
 ## Installation
 
@@ -48,22 +49,13 @@ from fastapi_mcp import FastApiMCP
 
 app = FastAPI()
 
-mcp = FastApiMCP(
-    app,
-
-    # Optional parameters
-    name="My API MCP",
-    description="My API description",
-    base_url="http://localhost:8000",
-)
+mcp = FastApiMCP(app)
 
 # Mount the MCP server directly to your FastAPI app
 mcp.mount()
 ```
 
 That's it! Your auto-generated MCP server is now available at `https://app.base.url/mcp`.
-
-> **Note on `base_url`**: While `base_url` is optional, it is highly recommended to provide it explicitly. The `base_url` tells the MCP server where to send API requests when tools are called. Without it, the library will attempt to determine the URL automatically, which may not work correctly in deployed environments where the internal and external URLs differ.
 
 ## Tool Naming
 
@@ -102,7 +94,6 @@ app = FastAPI()
 mcp = FastApiMCP(
     app,
     name="My API MCP",
-    base_url="http://localhost:8000",
     describe_all_responses=True,     # Include all possible response schemas in tool descriptions
     describe_full_response_schema=True  # Include full JSON schema in tool descriptions
 )
@@ -178,10 +169,7 @@ api_app = FastAPI()
 mcp_app = FastAPI()
 
 # Create MCP server from the API app
-mcp = FastApiMCP(
-    api_app,
-    base_url="http://api-host:8001",  # The URL where the API app will be running
-)
+mcp = FastApiMCP(api_app)
 
 # Mount the MCP server to the separate app
 mcp.mount(mcp_app)
@@ -213,6 +201,35 @@ async def new_endpoint():
 
 # Refresh the MCP server to include the new endpoint
 mcp.setup_server()
+```
+
+### Communication with the FastAPI App
+
+FastAPI-MCP uses ASGI transport by default, which means it communicates directly with your FastAPI app without making HTTP requests. This is more efficient and doesn't require a base URL.
+
+It's not even necessary that the FastAPI server will run. See the examples folder for more.
+
+If you need to specify a custom base URL or use a different transport method, you can provide your own `httpx.AsyncClient`:
+
+```python
+import httpx
+from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
+
+app = FastAPI()
+
+# Use a custom HTTP client with a specific base URL
+custom_client = httpx.AsyncClient(
+    base_url="https://api.example.com",
+    timeout=30.0
+)
+
+mcp = FastApiMCP(
+    app,
+    http_client=custom_client
+)
+
+mcp.mount()
 ```
 
 ## Examples
