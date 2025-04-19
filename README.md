@@ -142,6 +142,13 @@ mcp = FastApiMCP(
     include_tags=["public"]
 )
 
+# Limit maximum allowed length for combined tool name (calculated as server name + operation_id)
+# Some vendors throw errors if combined tool names are too long
+mcp = FastApiMCP(
+    app,
+    max_tool_name_length=25,
+)
+
 mcp.mount()
 ```
 

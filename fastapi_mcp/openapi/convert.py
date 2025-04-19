@@ -43,13 +43,13 @@ def convert_openapi_to_mcp_tools(
         for method, operation in path_item.items():
             # Skip non-HTTP methods
             if method not in ["get", "post", "put", "delete", "patch"]:
-                logger.warning(f"Skipping non-HTTP method: {method}")
+                logger.warning(f"Skipping non-HTTP method: {method.upper()} {path}")
                 continue
 
             # Get operation metadata
             operation_id = operation.get("operationId")
             if not operation_id:
-                logger.warning(f"Skipping operation with no operationId: {operation}")
+                logger.warning(f"Skipping operation with no operationId: {method.upper()} {path}, details: {operation}")
                 continue
 
             # Save operation details for later HTTP calls

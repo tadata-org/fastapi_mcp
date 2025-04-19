@@ -38,6 +38,7 @@ class FastApiMCP:
         exclude_operations: Optional[List[str]] = None,
         include_tags: Optional[List[str]] = None,
         exclude_tags: Optional[List[str]] = None,
+        max_tool_name_length: Optional[int] = None,
     ):
         """
         Create an MCP server from a FastAPI app.
@@ -52,6 +53,8 @@ class FastApiMCP:
             exclude_operations: List of operation IDs to exclude from MCP tools. Cannot be used with include_operations.
             include_tags: List of tags to include as MCP tools. Cannot be used with exclude_tags.
             exclude_tags: List of tags to exclude from MCP tools. Cannot be used with include_tags.
+            max_tool_name_length: Maximum length allowed for tools (some vendors prohibit long names).
+                Tools breaching this restriction will be filtered out.
         """
         # Validate operation and tag filtering options
         if include_operations is not None and exclude_operations is not None:
@@ -75,6 +78,7 @@ class FastApiMCP:
         self._exclude_operations = exclude_operations
         self._include_tags = include_tags
         self._exclude_tags = exclude_tags
+        self._max_tool_name_length = max_tool_name_length
 
         self._http_client = http_client or httpx.AsyncClient(
             transport=httpx.ASGITransport(app=self.fastapi, raise_app_exceptions=False),
@@ -320,17 +324,22 @@ class FastApiMCP:
             and self._exclude_operations is None
             and self._include_tags is None
             and self._exclude_tags is None
+            and self._max_tool_name_length is None
         ):
             return tools
 
         operations_by_tag: Dict[str, List[str]] = {}
         for path, path_item in openapi_schema.get("paths", {}).items():
             for method, operation in path_item.items():
+                operation_id = operation.get("operationId")
                 if method not in ["get", "post", "put", "delete", "patch"]:
+                    logger.warning(f"Skipping non-HTTP method: {method.upper()} {path}, operation_id: {operation_id}")
                     continue
 
-                operation_id = operation.get("operationId")
                 if not operation_id:
+                    logger.warning(
+                        f"Skipping operation with no operationId: {method.upper()} {path}, details: {operation}"
+                    )
                     continue
 
                 tags = operation.get("tags", [])
@@ -341,11 +350,14 @@ class FastApiMCP:
 
         operations_to_include = set()
 
+        all_operations = {tool.name for tool in tools}
+
         if self._include_operations is not None:
             operations_to_include.update(self._include_operations)
         elif self._exclude_operations is not None:
-            all_operations = {tool.name for tool in tools}
             operations_to_include.update(all_operations - set(self._exclude_operations))
+        elif self._max_tool_name_length is not None:
+            operations_to_include.update(all_operations)  # all_operations
 
         if self._include_tags is not None:
             for tag in self._include_tags:
@@ -355,8 +367,13 @@ class FastApiMCP:
             for tag in self._exclude_tags:
                 excluded_operations.update(operations_by_tag.get(tag, []))
 
-            all_operations = {tool.name for tool in tools}
             operations_to_include.update(all_operations - excluded_operations)
+
+        if self._max_tool_name_length is not None:
+            long_operations = {
+                tool.name for tool in tools if len(self.get_combined_full_name(tool.name)) > self._max_tool_name_length
+            }
+            operations_to_include = operations_to_include - long_operations
 
         filtered_tools = [tool for tool in tools if tool.name in operations_to_include]
 
@@ -367,3 +384,18 @@ class FastApiMCP:
             }
 
         return filtered_tools
+
+    def get_combined_full_name(self, operation_id: str) -> str:
+        """
+        Combined name consists of server name + operation_id
+
+        Args:
+            operation_id: As defined during creation
+
+        Returns:
+            concatenated string of server name + operation_id
+        """
+        if not self.name:
+            return operation_id
+
+        return f"{self.name}\\{operation_id}"
