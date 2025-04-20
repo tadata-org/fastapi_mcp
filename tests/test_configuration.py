@@ -378,7 +378,7 @@ def test_filtering_functionality():
     async def search_items_long():
         return [{"id": 1}]
 
-    # benchmark - no filter
+    # Benchmark - no filter
     no_filter = FastApiMCP(app)
     assert len(no_filter.tools) == 7
 
