@@ -6,9 +6,14 @@ Notes on filtering:
 - You can combine operation filtering with tag filtering (e.g., use `include_operations` with `include_tags`)
 - When combining filters, a greedy approach will be taken. Endpoints matching either criteria will be included
 """
-from examples.shared.items_app import app # The FastAPI app
+from examples.shared.apps.items import app # The FastAPI app
+from examples.shared.setup import setup_logging
+
 from fastapi_mcp import FastApiMCP
 
+setup_logging()
+
+# Examples demonstrating how to filter MCP tools by operation IDs and tags
 
 # Filter by including specific operation IDs
 include_operations_mcp = FastApiMCP(

@@ -4,9 +4,12 @@ You can create an MCP server from one FastAPI app, and mount it to a different a
 """
 from fastapi import FastAPI
 
-from examples.shared.items_app import app
+from examples.shared.apps.items import app
+from examples.shared.setup import setup_logging
 
 from fastapi_mcp import FastApiMCP
+
+setup_logging()
 
 MCP_SERVER_HOST = "localhost"
 MCP_SERVER_PORT = 8000
