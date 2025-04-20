@@ -6,40 +6,42 @@ Notes on filtering:
 - You can combine operation filtering with tag filtering (e.g., use `include_operations` with `include_tags`)
 - When combining filters, a greedy approach will be taken. Endpoints matching either criteria will be included
 """
-from examples.shared.apps.items import app
-from examples.shared.setup import setup_logging
-
+from examples.shared.items_app import app # The FastAPI app
 from fastapi_mcp import FastApiMCP
 
-setup_logging()
 
 # Filter by including specific operation IDs
 include_operations_mcp = FastApiMCP(
     app,
+    name="Item API MCP - Included Operations",
     include_operations=["get_item", "list_items"],
 )
 
 # Filter by excluding specific operation IDs
 exclude_operations_mcp = FastApiMCP(
     app,    
+    name="Item API MCP - Excluded Operations",
     exclude_operations=["create_item", "update_item", "delete_item"],
 )
 
 # Filter by including specific tags
 include_tags_mcp = FastApiMCP(
     app,
+    name="Item API MCP - Included Tags",
     include_tags=["items"],
 )
 
 # Filter by excluding specific tags
 exclude_tags_mcp = FastApiMCP(
     app,
+    name="Item API MCP - Excluded Tags",
     exclude_tags=["search"],
 )
 
 # Combine operation IDs and tags (include mode)
 combined_include_mcp = FastApiMCP(
     app,
+    name="Item API MCP - Combined Include",
     include_operations=["delete_item"],
     include_tags=["search"],
 )

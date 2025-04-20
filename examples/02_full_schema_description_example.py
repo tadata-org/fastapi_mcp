@@ -2,14 +2,9 @@
 """
 This example shows how to describe the full response schema instead of just a response example.
 """
-from examples.shared.apps.items import app # The FastAPI app
-from examples.shared.setup import setup_logging
-
+from examples.shared.items_app import app # The FastAPI app
 from fastapi_mcp import FastApiMCP
 
-setup_logging()
-
-# Add MCP server to the FastAPI app
 mcp = FastApiMCP(
     app,
     describe_full_response_schema=True,  # Include all possible response schemas in tool descriptions

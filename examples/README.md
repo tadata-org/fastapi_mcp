@@ -2,7 +2,7 @@
 
 The following examples demonstrate various features and usage patterns of FastAPI-MCP:
 
-1. [Simple Example](examples/01_simple_example.py) - Basic FastAPI-MCP integration
+1. [Basic Usage Example](examples/01_basic_usage_example.py) - Basic FastAPI-MCP integration
 2. [Full Schema Description](examples/02_full_schema_description_example.py) - Customizing schema descriptions
 3. [Custom Exposed Endpoints](examples/03_custom_exposed_endpoints_example.py) - Controlling which endpoints are exposed
 4. [Separate Server](examples/04_separate_server_example.py) - Deploying MCP server separately

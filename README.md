@@ -60,6 +60,7 @@ That's it! Your auto-generated MCP server is now available at `https://app.base.
 ## Documentation, Examples and Advanced Usage
 
 FastAPI-MCP provides comprehensive documentation in the `docs` folder:
+- [Best Practices](docs/00_BEST_PRACTICES.md) - Essential guidelines for converting APIs to MCP tools safely and effectively
 - [FAQ](docs/00_FAQ.md) - Frequently asked questions about usage, development and support
 - [Tool Naming](docs/01_tool_naming.md) - Best practices for naming your MCP tools using operation IDs
 - [Connecting to MCP Server](docs/02_connecting_to_the_mcp_server.md) - How to connect various MCP clients like Cursor and Claude Desktop
