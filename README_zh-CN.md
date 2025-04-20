@@ -14,6 +14,8 @@
 
 <p align="center"><a href="https://github.com/tadata-org/fastapi_mcp"><img src="https://github.com/user-attachments/assets/1cba1bf2-2fa4-46c7-93ac-1e9bb1a95257" alt="fastapi-mcp-usage" height="400"/></a></p>
 
+> 注意：最新版本请参阅 [README.md](README.md).
+
 ## 特点
 
 - **直接集成** - 直接将 MCP 服务器挂载到您的 FastAPI 应用
