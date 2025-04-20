@@ -1,26 +1,19 @@
-from examples.shared.apps import items
+"""
+This example shows how to re-register tools if you add endpoints after the MCP server was created.
+"""
+from examples.shared.apps.items import app # The FastAPI app
 from examples.shared.setup import setup_logging
 
-from fastapi import FastAPI
 from fastapi_mcp import FastApiMCP
 
 setup_logging()
 
-
-app = FastAPI()
-app.include_router(items.router)
-
-
-# Add MCP server to the FastAPI app
-mcp = FastApiMCP(app)
-
-
-# MCP server
-mcp.mount()
+mcp = FastApiMCP(app) # Add MCP server to the FastAPI app
+mcp.mount() # MCP server
 
 
 # This endpoint will not be registered as a tool, since it was added after the MCP instance was created
-@items.router.get("/new/endpoint/", operation_id="new_endpoint", response_model=dict[str, str])
+@app.get("/new/endpoint/", operation_id="new_endpoint", response_model=dict[str, str])
 async def new_endpoint():
     return {"message": "Hello, world!"}
 
@@ -31,5 +24,5 @@ mcp.setup_server()
 
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(items.router, host="0.0.0.0", port=8000)
+    
+    uvicorn.run(app, host="0.0.0.0", port=8000)
