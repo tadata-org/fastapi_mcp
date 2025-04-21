@@ -414,6 +414,22 @@ def test_filtering_functionality():
 
     max_long_name_mcp = FastApiMCP(app, name="mcp_server", max_tool_name_length=25)
     assert len(max_long_name_mcp.tools) == 6
+    assert {tool.name for tool in max_long_name_mcp.tools} == {
+        "list_items",
+        "get_item",
+        "create_item",
+        "update_item",
+        "delete_item",
+        "search_items",
+    }
+
+    combined_exclude_and_max_tags_mcp = FastApiMCP(app, exclude_tags=["write", "delete"], max_tool_name_length=25)
+    assert len(combined_exclude_and_max_tags_mcp.tools) == 3
+    assert {tool.name for tool in combined_exclude_and_max_tags_mcp.tools} == {
+        "get_item",
+        "list_items",
+        "search_items",
+    }
 
     # Test invalid combinations
     with pytest.raises(ValueError):

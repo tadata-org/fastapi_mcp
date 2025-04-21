@@ -483,13 +483,14 @@ class FastApiMCP:
         Returns:
             Filtered list of tools
         """
-        if (
-            self._include_operations is None
-            and self._exclude_operations is None
-            and self._include_tags is None
-            and self._exclude_tags is None
-            and self._max_tool_name_length is None
-        ):
+        include_exclude_conditions_exist = (
+            self._include_operations is not None
+            or self._exclude_operations is not None
+            or self._include_tags is not None
+            or self._exclude_tags is not None
+        )
+
+        if not include_exclude_conditions_exist and self._max_tool_name_length is None:
             return tools
 
         operations_by_tag: Dict[str, List[str]] = {}
@@ -520,8 +521,6 @@ class FastApiMCP:
             operations_to_include.update(self._include_operations)
         elif self._exclude_operations is not None:
             operations_to_include.update(all_operations - set(self._exclude_operations))
-        elif self._max_tool_name_length is not None:
-            operations_to_include.update(all_operations)  # all_operations
 
         if self._include_tags is not None:
             for tag in self._include_tags:
@@ -532,6 +531,11 @@ class FastApiMCP:
                 excluded_operations.update(operations_by_tag.get(tag, []))
 
             operations_to_include.update(all_operations - excluded_operations)
+
+        # This condition means that no include/exclude conditions exist,
+        # and we've reached this point because we have a max-length limit
+        if not include_exclude_conditions_exist:
+            operations_to_include = all_operations
 
         if self._max_tool_name_length is not None:
             long_operations = {
