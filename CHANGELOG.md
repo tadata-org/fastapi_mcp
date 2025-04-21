@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+🚀 FastApiMCP now supports MCP Authorization!
+
+You can now add MCP-compliant OAuth configuration in a FastAPI-native way, using your existing FastAPI `Depends()` that we all know and love.
+
+### Added
+- 🎉 Support for Authentication / Authorization compliant to [MCP 2025-03-26 Specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization), using OAuth 2.1
+
+## [Unreleased]
+
 🚀 FastApiMCP now works with ASGI-transport by default.
 
 This means the `base_url` argument is redundant, and thus has been removed.

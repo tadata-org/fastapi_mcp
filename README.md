@@ -1,6 +1,6 @@
 <p align="center"><a href="https://github.com/tadata-org/fastapi_mcp"><img src="https://github.com/user-attachments/assets/7e44e98b-a0ba-4aff-a68a-4ffee3a6189c" alt="fastapi-to-mcp" height=100/></a></p>
 <h1 align="center">FastAPI-MCP</h1>
-<p align="center">A zero-configuration tool for automatically exposing FastAPI endpoints as Model Context Protocol (MCP) tools.</p>
+<p align="center">Expose your FastAPI endpoints as Model Context Protocol (MCP) tools, with Auth!</p>
 <div align="center">
 
 [![PyPI version](https://badge.fury.io/py/fastapi-mcp.svg)](https://pypi.org/project/fastapi-mcp/)
@@ -17,13 +17,20 @@
 
 ## Features
 
-- **Direct integration** - Mount an MCP server directly to your FastAPI app
-- **Zero configuration** required - just point it at your FastAPI app and it works
-- **Automatic discovery** of all FastAPI endpoints and conversion to MCP tools
+- **FastAPI-native:** Not just another OpenAPI -> MCP converter
+
+- **Authentication** built in, using your existing FastAPI dependencies!
+
+- **Zero/Minimal configuration** required - just point it at your FastAPI app and it works
+
 - **Preserving schemas** of your request models and response models
+
 - **Preserve documentation** of all your endpoints, just as it is in Swagger
+
 - **Flexible deployment** - Mount your MCP server to the same app, or deploy separately
-- **ASGI transport** - Uses FastAPI's ASGI interface directly by default for efficient communication
+
+- **ASGI transport** - Uses FastAPI's ASGI interface directly for efficient communication
+
 
 ## Installation
 
@@ -56,6 +63,225 @@ mcp.mount()
 ```
 
 That's it! Your auto-generated MCP server is now available at `https://app.base.url/mcp`.
+
+# Authentication and Authorization
+
+FastAPI-MCP supports authentication and authorization using your existing FastAPI dependencies.
+
+It also supports the full OAuth 2 flow, compliant with [MCP Spec 2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization).
+
+It's worth noting that most MCP clients currently do not support the latest MCP spec, so for our examples we might use a bridge client such as `npx mcp-remote`. We recommend you use it as well, and we'll show our examples using it.
+
+## Basic Token Passthrough
+
+If you just want to be able to pass a valid authorization header, without supporting a full authentication flow, you don't need to do anything special.
+
+You just need to make sure your MCP client is sending it:
+
+```json
+{
+  "mcpServers": {
+    "remote-example": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://localhost:8000/mcp",
+        "--header",
+        "Authorization:${AUTH_HEADER}"
+      ]
+    },
+    "env": {
+      "AUTH_HEADER": "Bearer <your-token>"
+    }
+  }
+}
+```
+
+This is enough to pass the authorization header to your FastAPI endpoints.
+
+Optionally, if you want your MCP server to reject requests without an authorization header, you can add a dependency:
+
+```python
+from fastapi import Depends
+from fastapi_mcp import FastApiMCP, AuthConfig
+
+mcp = FastApiMCP(
+    app,
+    name="Protected MCP",
+    auth_config=AuthConfig(
+        dependencies=[Depends(verify_auth)],
+    ),
+)
+mcp.mount()
+```
+
+## OAuth Flow
+
+FastAPI-MCP supports the full OAuth 2 flow, compliant with [MCP Spec 2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization).
+
+It would look something like this:
+
+```python
+from fastapi import Depends
+from fastapi_mcp import FastApiMCP, AuthConfig
+
+mcp = FastApiMCP(
+    app,
+    name="MCP With OAuth",
+    auth_config=AuthConfig(
+        issuer=f"https://auth.example.com/",
+        authorize_url=f"https://auth.example.com/authorize",
+        oauth_metadata_url=f"https://auth.example.com/.well-known/oauth-authorization-server",
+        audience="my-audience",
+        client_id="my-client-id",
+        client_secret="my-client-secret",
+        dependencies=[Depends(verify_auth)],
+        setup_proxies=True,
+    ),
+)
+
+mcp.mount()
+```
+
+And you can call it like:
+
+```json
+{
+  "mcpServers": {
+    "fastapi-mcp": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://localhost:8000/mcp",
+        "8080"  // Optional port number. Necessary if you want your OAuth to work and you don't have dynamic client registration.
+      ]
+    }
+  }
+}
+```
+
+You can use it with any OAuth provider that supports the OAuth 2 spec. See explanation on [AuthConfig](#authconfig-explained) for more details.
+
+## Custom OAuth Metadata
+
+If you already have a properly configured OAuth server that works with MCP clients, or if you want full control over the metadata, you can provide your own OAuth metadata directly:
+
+```python
+from fastapi import Depends
+from fastapi_mcp import FastApiMCP, AuthConfig
+
+mcp = FastApiMCP(
+    app,
+    name="MCP With Custom OAuth",
+    auth_config=AuthConfig(
+        # Provide your own complete OAuth metadata
+        custom_oauth_metadata={
+            "issuer": "https://auth.example.com",
+            "authorization_endpoint": "https://auth.example.com/authorize",
+            "token_endpoint": "https://auth.example.com/token",
+            "registration_endpoint": "https://auth.example.com/register",
+            "scopes_supported": ["openid", "profile", "email"],
+            "response_types_supported": ["code"],
+            "grant_types_supported": ["authorization_code"],
+            "token_endpoint_auth_methods_supported": ["none"],
+            "code_challenge_methods_supported": ["S256"]
+        },
+
+        # Your auth checking dependency
+        dependencies=[Depends(verify_auth)],
+    ),
+)
+
+mcp.mount()
+```
+
+This approach gives you complete control over the OAuth metadata and is useful when:
+- You have a fully MCP-compliant OAuth server already configured
+- You need to customize the OAuth flow beyond what the proxy approach offers
+- You're using a custom or specialized OAuth implementation
+
+For this to work, you have to make sure mcp-remote is running [on a fixed port](#add-a-fixed-port-to-mcp-remote), for example `8080`, and then configure the callback URL to `http://127.0.0.1:8080/oauth/callback` in your OAuth provider.
+
+## Working Example with Auth0
+
+For a complete working example of OAuth integration with Auth0, check out the [auth_example_auth0.py](examples/auth_example_auth0.py) in the examples folder. This example demonstrates the simple case of using Auth0 as an OAuth provider, with a working example of the OAuth flow.
+
+For it to work, you need an .env file in the root of the project with the following variables:
+
+```
+AUTH0_DOMAIN=your-tenant.auth0.com
+AUTH0_AUDIENCE=https://your-tenant.auth0.com/api/v2/
+AUTH0_CLIENT_ID=your-client-id
+AUTH0_CLIENT_SECRET=your-client-secret
+```
+
+You also need to make sure to configure callback URLs properly in your Auth0 dashboard.
+
+## AuthConfig Explained
+
+### `setup_proxies=True`
+
+Most OAuth providers need some adaptation to work with MCP clients. This is where `setup_proxies=True` comes in - it creates proxy endpoints that make your OAuth provider compatible with MCP clients:
+
+```python
+mcp = FastApiMCP(
+    app,
+    auth_config=AuthConfig(
+        # Your OAuth provider information
+        issuer="https://auth.example.com",
+        authorize_url="https://auth.example.com/authorize",
+        oauth_metadata_url="https://auth.example.com/.well-known/oauth-authorization-server",
+
+        # Credentials registered with your OAuth provider
+        client_id="your-client-id",
+        client_secret="your-client-secret",
+
+        # Recommended, since some clients don't specify them
+        audience="your-api-audience",
+        default_scope="openid profile email",
+
+        # Your auth checking dependency
+        dependencies=[Depends(verify_auth)],
+
+        # Create compatibility proxies - usually needed!
+        setup_proxies=True,
+    ),
+)
+```
+
+You also need to make sure to configure callback URLs properly in your OAuth provider. With mcp-remote for example, you have to [use a fixed port](#add-a-fixed-port-to-mcp-remote).
+
+### Why Use Proxies?
+
+Proxies solve several problems:
+
+1. **Missing registration endpoints**: The MCP spec expects OAuth providers to support dynamic client registration, but many don't. The `setup_fake_dynamic_registration=True` option creates a compatible endpoint that just returns a static client ID and secret.
+
+2. **Scope handling**: Some MCP clients don't properly request scopes, so our proxy adds the necessary scopes for you.
+
+3. **Audience requirements**: Some OAuth providers require an audience parameter that MCP clients don't always provide. The proxy adds this automatically.
+
+### Add a fixed port to mcp-remote
+
+```json
+{
+  "mcpServers": {
+    "example": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://localhost:8000/mcp",
+        "8080"
+      ]
+    }
+  }
+}
+```
+
+Normally, mcp-remote will start on a random port, making it impossible to configure the OAuth provider's callback URL properly.
+
+
+You have to make sure mcp-remote is running on a fixed port, for example `8080`, and then configure the callback URL to `http://127.0.0.1:8080/oauth/callback` in your OAuth provider.
 
 ## Tool Naming
 
@@ -246,41 +472,38 @@ Once your FastAPI app with MCP integration is running, you can connect to it wit
 
 3. Cursor will discover all available tools and resources automatically.
 
-## Connecting to the MCP Server using [mcp-proxy stdio](https://github.com/sparfenyuk/mcp-proxy?tab=readme-ov-file#1-stdio-to-sse)
+## Connecting to the MCP Server using [mcp-remote](https://www.npmjs.com/package/mcp-remote)
 
-If your MCP client does not support SSE, for example Claude Desktop:
+If your MCP client does not support SSE, or, if you want want to support authentication, we recommend using `mcp-remote` as a bridge.
 
-1. Run your application.
+All the most popular MCP clients (Claude Desktop, Cursor & Windsurf) use the following config format:
 
-2. Install [mcp-proxy](https://github.com/sparfenyuk/mcp-proxy?tab=readme-ov-file#installing-via-pypi), for example: `uv tool install mcp-proxy`.
-
-3. Add in Claude Desktop MCP config file (`claude_desktop_config.json`):
-
-On Windows:
 ```json
 {
   "mcpServers": {
-    "my-api-mcp-proxy": {
-        "command": "mcp-proxy",
-        "args": ["http://127.0.0.1:8000/mcp"]
+    "fastapi-mcp": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://localhost:8000/mcp",
+        "8080"  // Optional port number. Necessary if you want your OAuth to work and you don't have dynamic client registration.
+      ]
     }
   }
 }
 ```
-On MacOS:
-```json
-{
-  "mcpServers": {
-    "my-api-mcp-proxy": {
-        "command": "/Full/Path/To/Your/Executable/mcp-proxy",
-        "args": ["http://127.0.0.1:8000/mcp"]
-    }
-  }
-}
-```
-Find the path to mcp-proxy by running in Terminal: `which mcp-proxy`.
 
-4. Claude Desktop will discover all available tools and resources automatically
+## FastAPI-first Approach
+
+FastAPI-MCP is designed as a native extension of FastAPI, not just a converter that generates MCP tools from your API. This approach offers several key advantages:
+
+- **Native dependencies**: Secure your MCP endpoints using familiar FastAPI `Depends()` for authentication and authorization
+
+- **ASGI transport**: Communicates directly with your FastAPI app using its ASGI interface, eliminating the need for HTTP calls from the MCP to your API
+
+- **Unified infrastructure**: Your FastAPI app doesn't need to run separately from the MCP server (though [separate deployment](#deploying-separately-from-original-fastapi-app) is also supported)
+
+This design philosophy ensures minimum friction when adding MCP capabilities to your existing FastAPI services.
 
 ## Development and Contributing
 
