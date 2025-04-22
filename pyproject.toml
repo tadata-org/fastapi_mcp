@@ -47,6 +47,8 @@ dev = [
     "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.1.1",
     "pre-commit>=4.2.0",
+    "pyjwt>=2.10.1",
+    "cryptography>=44.0.2",
 ]
 
 [project.urls]
