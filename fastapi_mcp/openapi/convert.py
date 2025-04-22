@@ -124,14 +124,14 @@ def convert_openapi_to_mcp_tools(
                                 # If we have an example response, add it to the docs
                                 if example_response:
                                     response_info += "\n\n**Example Response:**\n```json\n"
-                                    response_info += json.dumps(example_response, indent=2, ensure_ascii=False)
+                                    response_info += json.dumps(example_response, indent=2)
                                     response_info += "\n```"
                                 # Otherwise generate an example from the schema
                                 else:
                                     generated_example = generate_example_from_schema(display_schema)
                                     if generated_example:
                                         response_info += "\n\n**Example Response:**\n```json\n"
-                                        response_info += json.dumps(generated_example, indent=2, ensure_ascii=False)
+                                        response_info += json.dumps(generated_example, indent=2)
                                         response_info += "\n```"
 
                                 # Only include full schema information if requested
@@ -141,15 +141,15 @@ def convert_openapi_to_mcp_tools(
                                         items_schema = display_schema["items"]
 
                                         response_info += "\n\n**Output Schema:** Array of items with the following structure:\n```json\n"
-                                        response_info += json.dumps(items_schema, indent=2, ensure_ascii=False)
+                                        response_info += json.dumps(items_schema, indent=2)
                                         response_info += "\n```"
                                     elif "properties" in display_schema:
                                         response_info += "\n\n**Output Schema:**\n```json\n"
-                                        response_info += json.dumps(display_schema, indent=2, ensure_ascii=False)
+                                        response_info += json.dumps(display_schema, indent=2)
                                         response_info += "\n```"
                                     else:
                                         response_info += "\n\n**Output Schema:**\n```json\n"
-                                        response_info += json.dumps(display_schema, indent=2, ensure_ascii=False)
+                                        response_info += json.dumps(display_schema, indent=2)
                                         response_info += "\n```"
 
                 tool_description += response_info
