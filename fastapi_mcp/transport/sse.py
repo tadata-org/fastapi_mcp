@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from mcp.server.sse import SseServerTransport
 from mcp.types import JSONRPCMessage, JSONRPCError, ErrorData
+from fastapi_mcp.types import HTTPRequestInfo
 
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ class FastApiSseTransport(SseServerTransport):
         when using the original implementation.
         """
 
-        logger.debug("Handling POST message with FastAPI patterns")
+        logger.debug("Handling POST message SSE")
 
         session_id_param = request.query_params.get("session_id")
         if session_id_param is None:
@@ -57,6 +58,20 @@ class FastApiSseTransport(SseServerTransport):
 
         try:
             message = JSONRPCMessage.model_validate_json(body)
+
+            # HACK to inject the HTTP request info into the MCP message,
+            # so we can use it for auth.
+            # It is then used in our custom `LowlevelMCPServer.call_tool()` decorator.
+            if hasattr(message.root, "params") and message.root.params is not None:
+                message.root.params["_http_request_info"] = HTTPRequestInfo(
+                    method=request.method,
+                    path=request.url.path,
+                    headers=dict(request.headers),
+                    cookies=request.cookies,
+                    query_params=dict(request.query_params),
+                    body=body.decode(),
+                ).model_dump(mode="json")
+
             logger.debug(f"Validated client message: {message}")
         except ValidationError as err:
             logger.error(f"Failed to parse message: {err}")
