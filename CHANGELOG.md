@@ -5,16 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0]
+## [Unreleased]
 
 🚀 FastApiMCP now supports MCP Authorization!
 
 You can now add MCP-compliant OAuth configuration in a FastAPI-native way, using your existing FastAPI `Depends()` that we all know and love.
 
 ### Added
-- 🎉 Support for Authentication / Authorization compliant to [MCP 2025-03-26 Specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization), using OAuth 2.1
+- 🎉 Support for Authentication / Authorization compliant to [MCP 2025-03-26 Specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization), using OAuth 2.1. (#10)
+- 🎉 Support passing http headers to tool calls (#82)
 
-## [Unreleased]
+## [0.3.0]
 
 🚀 FastApiMCP now works with ASGI-transport by default.
 
