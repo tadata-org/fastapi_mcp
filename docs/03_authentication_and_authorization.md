@@ -49,6 +49,8 @@ mcp = FastApiMCP(
 mcp.mount()
 ```
 
+For a complete working example of authorization header, check out the [auth_example_token_passthrough.py](/examples/08_auth_example_token_passthrough.py) in the examples folder.
+
 ## OAuth Flow
 
 FastAPI-MCP supports the full OAuth 2 flow, compliant with [MCP Spec 2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization).
