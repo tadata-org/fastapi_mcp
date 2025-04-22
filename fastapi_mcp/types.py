@@ -41,13 +41,13 @@ class OAuthMetadata(BaseType):
     ]
 
     authorization_endpoint: Annotated[
-        StrHttpUrl,
+        Optional[StrHttpUrl],
         Doc(
             """
             URL of the authorization server's authorization endpoint.
             """
         ),
-    ]
+    ] = None
 
     token_endpoint: Annotated[
         StrHttpUrl,
@@ -353,18 +353,15 @@ class AuthConfig(BaseType):
 
     @model_validator(mode="after")
     def validate_required_fields(self):
-        if self.custom_oauth_metadata is None and self.issuer is None:
-            raise ValueError("'issuer' is required when 'custom_oauth_metadata' is not provided")
+        if self.custom_oauth_metadata is None and self.issuer is None and not self.dependencies:
+            raise ValueError("at least one of 'issuer', 'custom_oauth_metadata' or 'dependencies' is required")
 
         if self.setup_proxies:
             if self.client_id is None:
                 raise ValueError("'client_id' is required when 'setup_proxies' is True")
 
-        if self.setup_fake_dynamic_registration and not self.client_secret:
-            raise ValueError("'client_secret' is required when 'setup_fake_dynamic_registration' is True")
-
-        if self.setup_fake_dynamic_registration and not self.setup_proxies:
-            raise ValueError("'setup_fake_dynamic_registration' can only be True when 'setup_proxies' is True")
+            if self.setup_fake_dynamic_registration and not self.client_secret:
+                raise ValueError("'client_secret' is required when 'setup_fake_dynamic_registration' is True")
 
         return self
 
