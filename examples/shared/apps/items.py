@@ -2,12 +2,12 @@
 Simple example of using FastAPI-MCP to add an MCP server to a FastAPI app.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional
 
 
-router = APIRouter()
+app = FastAPI()
 
 
 class Item(BaseModel):
@@ -21,7 +21,7 @@ class Item(BaseModel):
 items_db: dict[int, Item] = {}
 
 
-@router.get("/items/", response_model=List[Item], tags=["items"], operation_id="list_items")
+@app.get("/items/", response_model=List[Item], tags=["items"], operation_id="list_items")
 async def list_items(skip: int = 0, limit: int = 10):
     """
     List all items in the database.
@@ -31,7 +31,7 @@ async def list_items(skip: int = 0, limit: int = 10):
     return list(items_db.values())[skip : skip + limit]
 
 
-@router.get("/items/{item_id}", response_model=Item, tags=["items"], operation_id="get_item")
+@app.get("/items/{item_id}", response_model=Item, tags=["items"], operation_id="get_item")
 async def read_item(item_id: int):
     """
     Get a specific item by its ID.
@@ -43,7 +43,7 @@ async def read_item(item_id: int):
     return items_db[item_id]
 
 
-@router.post("/items/", response_model=Item, tags=["items"], operation_id="create_item")
+@app.post("/items/", response_model=Item, tags=["items"], operation_id="create_item")
 async def create_item(item: Item):
     """
     Create a new item in the database.
@@ -54,7 +54,7 @@ async def create_item(item: Item):
     return item
 
 
-@router.put("/items/{item_id}", response_model=Item, tags=["items"], operation_id="update_item")
+@app.put("/items/{item_id}", response_model=Item, tags=["items"], operation_id="update_item")
 async def update_item(item_id: int, item: Item):
     """
     Update an existing item.
@@ -69,7 +69,7 @@ async def update_item(item_id: int, item: Item):
     return item
 
 
-@router.delete("/items/{item_id}", tags=["items"], operation_id="delete_item")
+@app.delete("/items/{item_id}", tags=["items"], operation_id="delete_item")
 async def delete_item(item_id: int):
     """
     Delete an item from the database.
@@ -83,7 +83,7 @@ async def delete_item(item_id: int):
     return {"message": "Item deleted successfully"}
 
 
-@router.get("/items/search/", response_model=List[Item], tags=["search"], operation_id="search_items")
+@app.get("/items/search/", response_model=List[Item], tags=["search"], operation_id="search_items")
 async def search_items(
     q: Optional[str] = Query(None, description="Search query string"),
     min_price: Optional[float] = Query(None, description="Minimum price"),

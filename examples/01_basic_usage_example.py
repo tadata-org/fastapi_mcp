@@ -1,18 +1,14 @@
-from examples.shared.apps import items
+from examples.shared.apps.items import app # The FastAPI app
 from examples.shared.setup import setup_logging
 
-from fastapi import FastAPI
 from fastapi_mcp import FastApiMCP
 
 setup_logging()
 
-
-app = FastAPI()
-app.include_router(items.router)
-
 # Add MCP server to the FastAPI app
 mcp = FastApiMCP(app)
 
+# Mount the MCP server to the FastAPI app
 mcp.mount()
 
 

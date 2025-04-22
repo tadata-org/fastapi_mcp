@@ -202,11 +202,13 @@ def convert_openapi_to_mcp_tools(
                 param_desc = param.get("description", "")
                 param_required = param.get("required", True)  # Path params are usually required
 
-                properties[param_name] = {
-                    "type": param_schema.get("type", "string"),
-                    "title": param_name,
-                    "description": param_desc,
-                }
+                properties[param_name] = param_schema.copy()
+                properties[param_name]["title"] = param_name
+                if param_desc:
+                    properties[param_name]["description"] = param_desc
+
+                if "type" not in properties[param_name]:
+                    properties[param_name]["type"] = param_schema.get("type", "string")
 
                 if param_required:
                     required_props.append(param_name)
@@ -217,11 +219,14 @@ def convert_openapi_to_mcp_tools(
                 param_desc = param.get("description", "")
                 param_required = param.get("required", False)
 
-                properties[param_name] = {
-                    "type": get_single_param_type_from_schema(param_schema),
-                    "title": param_name,
-                    "description": param_desc,
-                }
+                properties[param_name] = param_schema.copy()
+                properties[param_name]["title"] = param_name
+                if param_desc:
+                    properties[param_name]["description"] = param_desc
+
+                if "type" not in properties[param_name]:
+                    properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
+
                 if "default" in param_schema:
                     properties[param_name]["default"] = param_schema["default"]
 
@@ -233,10 +238,14 @@ def convert_openapi_to_mcp_tools(
                 param_schema = param.get("schema", {})
                 param_required = param.get("required", False)
 
-                properties[param_name] = {
-                    "type": get_single_param_type_from_schema(param_schema),
-                    "title": param_name,
-                }
+                properties[param_name] = param_schema.copy()
+                properties[param_name]["title"] = param_name
+                if param_desc:
+                    properties[param_name]["description"] = param_desc
+
+                if "type" not in properties[param_name]:
+                    properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
+
                 if "default" in param_schema:
                     properties[param_name]["default"] = param_schema["default"]
 

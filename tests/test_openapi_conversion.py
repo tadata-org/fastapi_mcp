@@ -271,3 +271,28 @@ def test_request_body_handling(complex_fastapi_app: FastAPI):
     assert "create_order" in operation_map
     assert operation_map["create_order"]["path"] == "/orders"
     assert operation_map["create_order"]["method"] == "post"
+
+
+def test_missing_type_handling(complex_fastapi_app: FastAPI):
+    openapi_schema = get_openapi(
+        title=complex_fastapi_app.title,
+        version=complex_fastapi_app.version,
+        openapi_version=complex_fastapi_app.openapi_version,
+        description=complex_fastapi_app.description,
+        routes=complex_fastapi_app.routes,
+    )
+
+    # Remove the type field from the product_id schema
+    params = openapi_schema["paths"]["/products/{product_id}"]["get"]["parameters"]
+    for param in params:
+        if param.get("name") == "product_id" and "schema" in param:
+            param["schema"].pop("type", None)
+            break
+
+    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
+
+    get_product_tool = next(tool for tool in tools if tool.name == "get_product")
+    get_product_props = get_product_tool.inputSchema["properties"]
+
+    assert "product_id" in get_product_props
+    assert get_product_props["product_id"].get("type") == "string"  # Default type applied
