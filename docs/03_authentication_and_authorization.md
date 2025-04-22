@@ -138,7 +138,7 @@ For this to work, you have to make sure mcp-remote is running [on a fixed port](
 
 ## Working Example with Auth0
 
-For a complete working example of OAuth integration with Auth0, check out the [auth_example_auth0.py](/examples/08_auth_example_auth0.py) in the examples folder. This example demonstrates the simple case of using Auth0 as an OAuth provider, with a working example of the OAuth flow.
+For a complete working example of OAuth integration with Auth0, check out the [auth_example_auth0.py](/examples/09_auth_example_auth0.py) in the examples folder. This example demonstrates the simple case of using Auth0 as an OAuth provider, with a working example of the OAuth flow.
 
 For it to work, you need an .env file in the root of the project with the following variables:
 
