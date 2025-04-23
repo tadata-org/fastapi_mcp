@@ -48,7 +48,7 @@
         "anchors": [
           {
             "anchor": "Documentation",
-            "href": "https://tadata-f9452859.mintlify.app/",
+            "href": "https://fastapi-mcp.tadata.com/",
             "icon": "book-open-cover"
           },
           {
@@ -77,7 +77,8 @@
     "footer": {
       "socials": {
         "x": "https://x.com/makhlevich",
-        "github": "https://github.com/tadata-org/fastapi_mcp"
+        "github": "https://github.com/tadata-org/fastapi_mcp",
+        "website": "https://tadata.com/"
       }
     },
     "theme": "mint"
