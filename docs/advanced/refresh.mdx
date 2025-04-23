@@ -1,0 +1,25 @@
+---
+title: Refreshing the Server
+description: Adding endpoints after MCP server creation
+icon: arrows-rotate
+---
+
+If you add endpoints to your FastAPI app after creating the MCP server, you'll need to refresh the server to include them:
+
+```python {9-12, 15}
+from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
+
+app = FastAPI()
+
+mcp = FastApiMCP(app)
+mcp.mount()
+
+# Add new endpoints after MCP server creation
+@app.get("/new/endpoint/", operation_id="new_endpoint")
+async def new_endpoint():
+    return {"message": "Hello, world!"}
+
+# Refresh the MCP server to include the new endpoint
+mcp.setup_server()
+```

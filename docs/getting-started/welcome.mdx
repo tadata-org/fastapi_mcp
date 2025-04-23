@@ -1,0 +1,36 @@
+---
+title: "Welcome to FastAPI-MCP!"
+sidebarTitle: "Welcome!"
+description: Expose your FastAPI endpoints as Model Context Protocol (MCP) tools, with Auth!
+
+icon: hand-wave
+---
+
+MCP (Model Context Protocol) is the emerging standard to define how AI agents communicate with applications. Using FastAPI-MCP, creating a secured  MCP server to your application takes only 3 lines of code:
+
+```python {2, 6, 7}
+from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
+
+app = FastAPI()
+
+mcp = FastApiMCP(app)
+mcp.mount()
+```
+That's it! Your auto-generated MCP server is now available at `https://app.base.url/mcp`
+
+## Features
+
+- [**Authentication**](/advanced/auth) built in, using your existing FastAPI dependencies!
+
+- **FastAPI-native:** Not just another OpenAPI -> MCP converter
+
+- **Zero configuration** required - just point it at your FastAPI app and it works
+
+- **Preserving schemas** of your request models and response models
+
+- **Preserve documentation** of all your endpoints, just as it is in Swagger
+
+- [**Flexible deployment**](/advanced/deploy) - Mount your MCP server to the same app, or deploy separately
+
+- [**ASGI transport**](/advanced/transport) - Uses FastAPI's ASGI interface directly for efficient communication
