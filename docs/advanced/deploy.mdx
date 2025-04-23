@@ -1,0 +1,35 @@
+---
+title: Deploying the Server
+icon: play
+---
+
+## Deploying separately from original FastAPI app
+
+You are not limited to serving the MCP on the same FastAPI app from which it was created.
+
+You can create an MCP server from one FastAPI app, and mount it to a different app:
+
+```python {9, 15, }
+from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
+
+# Your API app
+api_app = FastAPI()
+# ... define your API endpoints on api_app ...
+
+# A separate app for the MCP server
+mcp_app = FastAPI()
+
+# Create MCP server from the API app
+mcp = FastApiMCP(api_app)
+
+# Mount the MCP server to the separate app
+mcp.mount(mcp_app)
+```
+
+Then, you can run both apps separately:
+
+```bash
+uvicorn main:api_app --host api-host --port 8001
+uvicorn main:mcp_app --host mcp-host --port 8000
+```

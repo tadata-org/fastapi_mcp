@@ -1,10 +1,13 @@
-# Tool Naming
+---
+title: Tool Naming
+icon: input-text    
+---
 
 FastAPI-MCP uses the `operation_id` from your FastAPI routes as the MCP tool names. When you don't specify an `operation_id`, FastAPI auto-generates one, but these can be cryptic.
 
 Compare these two endpoint definitions:
 
-```python
+```python {2, 7}
 # Auto-generated operation_id (something like "read_user_users__user_id__get")
 @app.get("/users/{user_id}")
 async def read_user(user_id: int):

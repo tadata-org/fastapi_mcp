@@ -11,6 +11,7 @@
 
 </div>
 
+
 <p align="center"><a href="https://github.com/tadata-org/fastapi_mcp"><img src="https://github.com/user-attachments/assets/b205adc6-28c0-4e3c-a68b-9c1a80eb7d0c" alt="fastapi-mcp-usage" height="400"/></a></p>
 
 
@@ -65,15 +66,7 @@ That's it! Your auto-generated MCP server is now available at `https://app.base.
 
 ## Documentation, Examples and Advanced Usage
 
-FastAPI-MCP provides comprehensive documentation in the `docs` folder:
-- [Best Practices](docs/00_BEST_PRACTICES.md) - Essential guidelines for converting APIs to MCP tools safely and effectively
-- [FAQ](docs/00_FAQ.md) - Frequently asked questions about usage, development and support
-- [Tool Naming](docs/01_tool_naming.md) - Best practices for naming your MCP tools using operation IDs
-- [Connecting to MCP Server](docs/02_connecting_to_the_mcp_server.md) - How to connect various MCP clients like Cursor and Claude Desktop
-- [Authentication and Authorization](docs/03_authentication_and_authorization.md) - How to authenticate and authorize your MCP tools
-- [Advanced Usage](docs/04_advanced_usage.md) - Advanced features like custom schemas, endpoint filtering, and separate deployment
-
-Check out the [examples directory](examples) for code samples demonstrating these features in action.
+FastAPI-MCP provides [comprehensive documentation](https://fastapi-mcp.tadata.com/). Additionaly, check out the [examples directory](examples) for code samples demonstrating these features in action.
 
 ## FastAPI-first Approach
 
@@ -83,7 +76,7 @@ FastAPI-MCP is designed as a native extension of FastAPI, not just a converter t
 
 - **ASGI transport**: Communicates directly with your FastAPI app using its ASGI interface, eliminating the need for HTTP calls from the MCP to your API
 
-- **Unified infrastructure**: Your FastAPI app doesn't need to run separately from the MCP server (though [separate deployment](docs/04_advanced_usage.md#deploying-separately-from-original-fastapi-app) is also supported)
+- **Unified infrastructure**: Your FastAPI app doesn't need to run separately from the MCP server (though [separate deployment](https://fastapi-mcp.tadata.com/advanced/deploy#deploying-separately-from-original-fastapi-app) is also supported)
 
 This design philosophy ensures minimum friction when adding MCP capabilities to your existing FastAPI services.
 

@@ -1,0 +1,131 @@
+---
+title: Customization
+icon: pen
+---
+
+## Server metadata
+
+You can define the MCP server name and description by modifying:
+
+```python {8-9}
+from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
+
+app = FastAPI()
+
+mcp = FastApiMCP(
+    app,
+    name="My API MCP",
+    description="Very cool MCP server",
+)
+mcp.mount()
+```
+
+## Tool and schema descriptions
+
+When creating the MCP server you can include all possible response schemas in tool descriptions by changing the flag `describe_all_responses`, or include full JSON schema in tool descriptions by changing `describe_full_response_schema`:
+
+```python {10-11}
+from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
+
+app = FastAPI()
+
+mcp = FastApiMCP(
+    app,
+    name="My API MCP",
+    description="Very cool MCP server",
+    describe_all_responses=True,
+    describe_full_response_schema=True
+)
+
+mcp.mount()
+```
+
+## Customizing Exposed Endpoints
+
+You can control which FastAPI endpoints are exposed as MCP tools using Open API operation IDs or tags to:
+- Only include specific operations
+- Exclude specific operations
+- Only include operations with specific tags
+- Exclude operations with specific tags
+- Combine operation IDs and tags
+
+### Code samples
+
+The relevant arguments for these configurations are `include_operations`, `exclude_operations`, `include_tags`, `exclude_tags` and can be used as follows:
+
+<CodeGroup>
+    ```python Include Operations {8}
+    from fastapi import FastAPI
+    from fastapi_mcp import FastApiMCP
+
+    app = FastAPI()
+
+    mcp = FastApiMCP(
+        app,
+        include_operations=["get_user", "create_user"]
+    )
+    mcp.mount()
+    ```
+
+    ```python Exclude Operations {8}
+    from fastapi import FastAPI
+    from fastapi_mcp import FastApiMCP
+
+    app = FastAPI()
+
+    mcp = FastApiMCP(
+        app,
+        exclude_operations=["delete_user"]
+    )
+    mcp.mount()
+    ```
+
+    ```python Include Tags {8}
+    from fastapi import FastAPI
+    from fastapi_mcp import FastApiMCP
+
+    app = FastAPI()
+
+    mcp = FastApiMCP(
+        app,
+        include_tags=["users", "public"]
+    )
+    mcp.mount()
+    ```
+
+    ```python Exclude Tags {8}
+    from fastapi import FastAPI
+    from fastapi_mcp import FastApiMCP
+
+    app = FastAPI()
+
+    mcp = FastApiMCP(
+        app,
+        exclude_tags=["admin", "internal"]
+    )
+    mcp.mount()
+    ```
+
+    ```python Combined (include mode) {8-9}
+    from fastapi import FastAPI
+    from fastapi_mcp import FastApiMCP
+
+    app = FastAPI()
+
+    mcp = FastApiMCP(
+        app,
+        include_operations=["user_login"],
+        include_tags=["public"]
+    )
+    mcp.mount()
+    ```
+</CodeGroup>
+
+### Notes on filtering
+
+- You cannot use both `include_operations` and `exclude_operations` at the same time
+- You cannot use both `include_tags` and `exclude_tags` at the same time
+- You can combine operation filtering with tag filtering (e.g., use `include_operations` with `include_tags`)
+- When combining filters, a greedy approach will be taken. Endpoints matching either criteria will be included
