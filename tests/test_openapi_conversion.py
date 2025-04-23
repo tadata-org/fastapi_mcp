@@ -239,6 +239,10 @@ def test_request_body_handling(complex_fastapi_app: FastAPI):
         routes=complex_fastapi_app.routes,
     )
 
+    create_order_route = openapi_schema["paths"]["/orders"]["post"]
+    original_request_body = create_order_route["requestBody"]["content"]["application/json"]["schema"]
+    original_properties = original_request_body.get("properties", {})
+
     tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
 
     create_order_tool = next(tool for tool in tools if tool.name == "create_order")
@@ -250,6 +254,19 @@ def test_request_body_handling(complex_fastapi_app: FastAPI):
     assert "shipping_address_id" in properties
     assert "payment_method" in properties
     assert "notes" in properties
+
+    for param_name in ["customer_id", "items", "shipping_address_id", "payment_method", "notes"]:
+        if "description" in original_properties.get(param_name, {}):
+            assert "description" in properties[param_name]
+            assert properties[param_name]["description"] == original_properties[param_name]["description"]
+
+    for param_name in ["customer_id", "items", "shipping_address_id", "payment_method", "notes"]:
+        assert properties[param_name]["title"] == param_name
+
+    for param_name in ["customer_id", "items", "shipping_address_id", "payment_method", "notes"]:
+        if "default" in original_properties.get(param_name, {}):
+            assert "default" in properties[param_name]
+            assert properties[param_name]["default"] == original_properties[param_name]["default"]
 
     required = create_order_tool.inputSchema.get("required", [])
     assert "customer_id" in required
@@ -267,6 +284,18 @@ def test_request_body_handling(complex_fastapi_app: FastAPI):
             assert "quantity" in item_props["properties"]
             assert "unit_price" in item_props["properties"]
             assert "total" in item_props["properties"]
+
+            for nested_param in ["product_id", "quantity", "unit_price", "total"]:
+                assert "title" in item_props["properties"][nested_param]
+
+                # Check if the original nested schema had descriptions
+                original_item_schema = original_properties.get("items", {}).get("items", {}).get("properties", {})
+                if "description" in original_item_schema.get(nested_param, {}):
+                    assert "description" in item_props["properties"][nested_param]
+                    assert (
+                        item_props["properties"][nested_param]["description"]
+                        == original_item_schema[nested_param]["description"]
+                    )
 
     assert "create_order" in operation_map
     assert operation_map["create_order"]["path"] == "/orders"
@@ -296,3 +325,100 @@ def test_missing_type_handling(complex_fastapi_app: FastAPI):
 
     assert "product_id" in get_product_props
     assert get_product_props["product_id"].get("type") == "string"  # Default type applied
+
+
+def test_body_params_descriptions_and_defaults(complex_fastapi_app: FastAPI):
+    """
+    Test that descriptions and defaults from request body parameters
+    are properly transferred to the MCP tool schema properties.
+    """
+    openapi_schema = get_openapi(
+        title=complex_fastapi_app.title,
+        version=complex_fastapi_app.version,
+        openapi_version=complex_fastapi_app.openapi_version,
+        description=complex_fastapi_app.description,
+        routes=complex_fastapi_app.routes,
+    )
+
+    order_request_schema = openapi_schema["components"]["schemas"]["OrderRequest"]
+
+    order_request_schema["properties"]["customer_id"]["description"] = "Test customer ID description"
+    order_request_schema["properties"]["payment_method"]["description"] = "Test payment method description"
+    order_request_schema["properties"]["notes"]["default"] = "Default order notes"
+
+    item_schema = openapi_schema["components"]["schemas"]["OrderItem"]
+    item_schema["properties"]["product_id"]["description"] = "Test product ID description"
+    item_schema["properties"]["quantity"]["default"] = 1
+
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+
+    create_order_tool = next(tool for tool in tools if tool.name == "create_order")
+    properties = create_order_tool.inputSchema["properties"]
+
+    assert "description" in properties["customer_id"]
+    assert properties["customer_id"]["description"] == "Test customer ID description"
+
+    assert "description" in properties["payment_method"]
+    assert properties["payment_method"]["description"] == "Test payment method description"
+
+    assert "default" in properties["notes"]
+    assert properties["notes"]["default"] == "Default order notes"
+
+    if "items" in properties:
+        assert properties["items"]["type"] == "array"
+        assert "items" in properties["items"]
+
+        item_props = properties["items"]["items"]["properties"]
+
+        assert "description" in item_props["product_id"]
+        assert item_props["product_id"]["description"] == "Test product ID description"
+
+        assert "default" in item_props["quantity"]
+        assert item_props["quantity"]["default"] == 1
+
+
+def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
+    """
+    Test handling of edge cases for body parameters, such as:
+    - Empty or missing descriptions
+    - Missing type information
+    - Empty properties object
+    - Schema without properties
+    """
+    openapi_schema = get_openapi(
+        title=complex_fastapi_app.title,
+        version=complex_fastapi_app.version,
+        openapi_version=complex_fastapi_app.openapi_version,
+        description=complex_fastapi_app.description,
+        routes=complex_fastapi_app.routes,
+    )
+
+    order_request_schema = openapi_schema["components"]["schemas"]["OrderRequest"]
+
+    if "description" in order_request_schema["properties"]["customer_id"]:
+        del order_request_schema["properties"]["customer_id"]["description"]
+
+    if "type" in order_request_schema["properties"]["notes"]:
+        del order_request_schema["properties"]["notes"]["type"]
+
+    item_schema = openapi_schema["components"]["schemas"]["OrderItem"]
+
+    if "properties" in item_schema["properties"]["total"]:
+        del item_schema["properties"]["total"]["properties"]
+
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+
+    create_order_tool = next(tool for tool in tools if tool.name == "create_order")
+    properties = create_order_tool.inputSchema["properties"]
+
+    assert "customer_id" in properties
+    assert "title" in properties["customer_id"]
+    assert properties["customer_id"]["title"] == "customer_id"
+
+    assert "notes" in properties
+    assert "type" in properties["notes"]
+    assert properties["notes"]["type"] in ["string", "object"]  # Default should be either string or object
+
+    if "items" in properties:
+        item_props = properties["items"]["items"]["properties"]
+        assert "total" in item_props
