@@ -66,7 +66,7 @@ That's it! Your auto-generated MCP server is now available at `https://app.base.
 
 ## Documentation, Examples and Advanced Usage
 
-FastAPI-MCP provides [comprehensive documentation](https://tadata-f9452859.mintlify.app/). Additionaly, check out the [examples directory](examples) for code samples demonstrating these features in action.
+FastAPI-MCP provides [comprehensive documentation](https://fastapi-mcp.tadata.com/). Additionaly, check out the [examples directory](examples) for code samples demonstrating these features in action.
 
 ## FastAPI-first Approach
 
@@ -76,7 +76,7 @@ FastAPI-MCP is designed as a native extension of FastAPI, not just a converter t
 
 - **ASGI transport**: Communicates directly with your FastAPI app using its ASGI interface, eliminating the need for HTTP calls from the MCP to your API
 
-- **Unified infrastructure**: Your FastAPI app doesn't need to run separately from the MCP server (though [separate deployment](https://tadata-f9452859.mintlify.app/advanced/deploy#deploying-separately-from-original-fastapi-app) is also supported)
+- **Unified infrastructure**: Your FastAPI app doesn't need to run separately from the MCP server (though [separate deployment](https://fastapi-mcp.tadata.com/advanced/deploy#deploying-separately-from-original-fastapi-app) is also supported)
 
 This design philosophy ensures minimum friction when adding MCP capabilities to your existing FastAPI services.
 
