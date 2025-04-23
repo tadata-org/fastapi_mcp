@@ -236,6 +236,7 @@ def convert_openapi_to_mcp_tools(
             # Add body parameters to properties
             for param_name, param in body_params:
                 param_schema = param.get("schema", {})
+                param_desc = param.get("description", "")
                 param_required = param.get("required", False)
 
                 properties[param_name] = param_schema.copy()
