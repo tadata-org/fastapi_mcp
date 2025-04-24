@@ -37,7 +37,7 @@ async def test_execute_api_tool_success(simple_fastapi_app: FastAPI):
     # Verify the result
     assert len(result) == 1
     assert isinstance(result[0], TextContent)
-    assert result[0].text == '{\n  "id": 1,\n  "name": "Test Item"\n}'
+    assert result[0].text == '{"id": 1, "name": "Test Item"}'
     
     # Verify the HTTP client was called correctly
     mock_client.get.assert_called_once_with(
