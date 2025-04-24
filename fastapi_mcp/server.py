@@ -422,7 +422,7 @@ class FastApiMCP:
             # TODO: Better typing for the AsyncClientProtocol. It should return a ResponseProtocol that has a json() method that returns a dict/list/etc.
             try:
                 result = response.json()
-                result_text = json.dumps(result, indent=2, ensure_ascii=False)
+                result_text = json.dumps(result, indent=None, ensure_ascii=False)
             except json.JSONDecodeError:
                 if hasattr(response, "text"):
                     result_text = response.text
