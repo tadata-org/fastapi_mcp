@@ -3,7 +3,9 @@ FastAPI-MCP: Automatic MCP server generator for FastAPI applications.
 
 Created by Tadata Inc. (https://github.com/tadata-org)
 """
-
+try:
+    from ._version import version as __version__  # type: ignore
+except ImportError:
 try:
     from importlib.metadata import version
 
@@ -12,12 +14,13 @@ except Exception:  # pragma: no cover
     # Fallback for local development
     __version__ = "0.0.0.dev0"  # pragma: no cover
 
-from .server import FastApiMCP
-from .types import AuthConfig, OAuthMetadata
+from .server import add_mcp_server, create_mcp_server, mount_mcp_server
+from .http_tools import create_mcp_tools_from_openapi
 
 
 __all__ = [
-    "FastApiMCP",
-    "AuthConfig",
-    "OAuthMetadata",
+    "add_mcp_server",
+    "create_mcp_server",
+    "mount_mcp_server",
+    "create_mcp_tools_from_openapi",
 ]
