@@ -1,8 +1,9 @@
 name: Release
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   deploy:
@@ -27,12 +28,18 @@ jobs:
         run: |
           uv sync --all-extras --dev
           uv pip install build twine
+          
+      - name: Build the package
+        run: |
+          uv run python -m build
 
+      - name: Check built packages
+        run: |
+          uv run twine check dist/*
+          
       - name: Build and publish
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          uv run python -m build
-          uv run twine check dist/*
-          uv run twine upload dist/*
+          uv run twine upload --repository-url https://test.pypi.org/legacy/ dist/*
