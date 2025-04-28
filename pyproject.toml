@@ -1,10 +1,11 @@
 [build-system]
-requires = ["hatchling", "tomli"]
-build-backend = "hatchling.build"
+requires = ["setuptools", "setuptools_scm[toml]", "tomli", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "fastapi-mcp"
-version = "0.3.3"
+dynamic = ["version"]
+#version = "0.3.3"
 description = "Automatic MCP server generator for FastAPI applications - converts FastAPI endpoints to MCP tools for LLM integration"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,6 +36,7 @@ dependencies = [
     "uvicorn>=0.20.0",
     "httpx>=0.24.0",
     "requests>=2.25.0",
+    "inspect-mate>=0.0.2",
     "tomli>=2.2.1",
 ]
 
@@ -43,12 +45,10 @@ dev = [
     "mypy>=1.15.0",
     "ruff>=0.9.10",
     "types-setuptools>=75.8.2.20250305",
-    "pytest>=8.3.5",
-    "pytest-asyncio>=0.26.0",
-    "pytest-cov>=6.1.1",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
     "pre-commit>=4.2.0",
-    "pyjwt>=2.10.1",
-    "cryptography>=44.0.2",
 ]
 
 [project.urls]
@@ -59,8 +59,11 @@ Documentation = "https://github.com/tadata-org/fastapi_mcp#readme"
 "Source Code" = "https://github.com/tadata-org/fastapi_mcp"
 "Changelog" = "https://github.com/tadata-org/fastapi_mcp/blob/main/CHANGELOG.md"
 
-[tool.hatch.build.targets.wheel]
-packages = ["fastapi_mcp"]
+#[tool.hatch.build.targets.wheel]
+#packages = ["fastapi_mcp"]
+
+[project.scripts]
+fastapi-mcp = "fastapi_mcp.cli:app"
 
 [tool.ruff]
 line-length = 120
@@ -70,3 +73,9 @@ target-version = "py312"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = "test_*.py"
+
+[tool.setuptools_scm]
+# This tells setuptools_scm to get the version automatically from Git tags
+version_scheme = "post-release"
+local_scheme = "no-local-version"
+
