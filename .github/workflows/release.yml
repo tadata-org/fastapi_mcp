@@ -40,7 +40,7 @@ jobs:
       - name: Build and publish
         env:
           TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.Ann18 }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           uv run twine upload --repository-url https://test.pypi.org/legacy/ --verbose dist/* 
           
