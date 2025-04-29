@@ -27,6 +27,8 @@ classifiers = [
 ]
 keywords = ["fastapi", "openapi", "mcp", "llm", "claude", "ai", "tools", "api", "conversion", "modelcontextprotocol"]
 dependencies = [
+    "cryptography",
+    "PyJWT",
     "fastapi>=0.100.0",
     "typer>=0.9.0",
     "rich>=13.0.0",
@@ -44,6 +46,8 @@ dependencies = [
 dev = [
     "mypy>=1.15.0",
     "ruff>=0.9.10",
+    "types-PyJWT",
+    "types-cryptography",
     "types-setuptools>=75.8.2.20250305",
     "pytest>=7.4.0",
     "pytest-asyncio>=0.23.0",
