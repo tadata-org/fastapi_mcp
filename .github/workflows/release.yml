@@ -24,12 +24,19 @@ jobs:
         with:
           python-version-file: ".python-version"
 
+      - name: Extract version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV    
+
       - name: Install build dependencies
         run: |
           uv sync --all-extras --dev
           uv pip install build twine
           
       - name: Build the package
+        env:
+          # Use this environment variable to explicitly set the version
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ env.VERSION }}
         run: |
           uv run python -m build
 
