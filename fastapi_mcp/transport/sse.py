@@ -5,6 +5,7 @@ from typing import Union
 from anyio.streams.memory import MemoryObjectSendStream
 from fastapi import Request, Response, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
+from mcp.shared.message import SessionMessage
 from pydantic import ValidationError
 from mcp.server.sse import SseServerTransport
 from mcp.types import JSONRPCMessage, JSONRPCError, ErrorData
@@ -87,7 +88,7 @@ class FastApiSseTransport(SseServerTransport):
 
         # Create background task to send message
         background_tasks = BackgroundTasks()
-        background_tasks.add_task(self._send_message_safely, writer, message)
+        background_tasks.add_task(self._send_message_safely, writer, SessionMessage(message))
         logger.debug("Accepting message, will send in background")
 
         # Return response with background task
@@ -96,7 +97,7 @@ class FastApiSseTransport(SseServerTransport):
         return response
 
     async def _send_message_safely(
-        self, writer: MemoryObjectSendStream[JSONRPCMessage], message: Union[JSONRPCMessage, ValidationError]
+        self, writer: MemoryObjectSendStream[SessionMessage], message: Union[SessionMessage, ValidationError]
     ):
         """Send a message to the writer, avoiding ASGI race conditions"""
 
@@ -115,7 +116,7 @@ class FastApiSseTransport(SseServerTransport):
                     id="unknown",  # We don't know the ID from the invalid request
                     error=error_data,
                 )
-                error_message = JSONRPCMessage(root=json_rpc_error)
+                error_message = SessionMessage(JSONRPCMessage(root=json_rpc_error))
                 await writer.send(error_message)
             else:
                 await writer.send(message)

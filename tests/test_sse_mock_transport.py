@@ -3,6 +3,7 @@ import uuid
 from uuid import UUID
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import HTTPException, Request
+from mcp.shared.message import SessionMessage
 from pydantic import ValidationError
 from anyio.streams.memory import MemoryObjectSendStream
 
@@ -145,9 +146,10 @@ async def test_send_message_safely_with_validation_error(
     # Verify that the writer.send was called with a JSONRPCError
     assert mock_writer.send.called
     sent_message = mock_writer.send.call_args[0][0]
-    assert isinstance(sent_message, JSONRPCMessage)
-    assert isinstance(sent_message.root, JSONRPCError)
-    assert sent_message.root.error.code == -32700  # Parse error code
+    assert isinstance(sent_message, SessionMessage)
+    assert isinstance(sent_message.message, JSONRPCMessage)
+    assert isinstance(sent_message.message.root, JSONRPCError)
+    assert sent_message.message.root.error.code == -32700  # Parse error code
 
 
 @pytest.mark.anyio
@@ -156,7 +158,9 @@ async def test_send_message_safely_with_jsonrpc_message(
 ) -> None:
     """Test sending a JSONRPCMessage safely."""
     # Create a JSONRPCMessage
-    message = JSONRPCMessage.model_validate({"jsonrpc": "2.0", "id": "123", "method": "test_method", "params": {}})
+    message = SessionMessage(
+        JSONRPCMessage.model_validate({"jsonrpc": "2.0", "id": "123", "method": "test_method", "params": {}})
+    )
 
     # Call the function
     await mock_transport._send_message_safely(mock_writer, message)
@@ -176,7 +180,9 @@ async def test_send_message_safely_exception_handling(
     mock_writer.send.side_effect = Exception("Test exception")
 
     # Create a message
-    message = JSONRPCMessage.model_validate({"jsonrpc": "2.0", "id": "123", "method": "test_method", "params": {}})
+    message = SessionMessage(
+        JSONRPCMessage.model_validate({"jsonrpc": "2.0", "id": "123", "method": "test_method", "params": {}})
+    )
 
     # Call the function - it should not raise an exception
     await mock_transport._send_message_safely(mock_writer, message)
