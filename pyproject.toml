@@ -49,6 +49,7 @@ dev = [
     "pre-commit>=4.2.0",
     "pyjwt>=2.10.1",
     "cryptography>=44.0.2",
+    "frontegg>=3.0.4",
 ]
 
 [project.urls]
