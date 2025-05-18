@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.4]
 
-Updates the `mcp` dependency to `1.8.1`.
+### Fixed
+- 🐛 Update the `mcp` dependency to `1.8.1`. Fixes [Issue #134](https://github.com/tadata-org/fastapi_mcp/issues/134) that was caused after a breaking change in mcp sdk 1.8.0.
 
 ## [0.3.3]
 
