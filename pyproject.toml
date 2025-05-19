@@ -5,7 +5,6 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fastapi-mcp"
 dynamic = ["version"]
-#version = "0.3.3"
 description = "Automatic MCP server generator for FastAPI applications - converts FastAPI endpoints to MCP tools for LLM integration"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,7 +29,7 @@ dependencies = [
     "fastapi>=0.100.0",
     "typer>=0.9.0",
     "rich>=13.0.0",
-    "mcp>=1.6.0",
+    "mcp>=1.8.1",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.5.2",
     "uvicorn>=0.20.0",
