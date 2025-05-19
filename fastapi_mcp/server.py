@@ -93,6 +93,14 @@ class FastApiMCP:
                 """
             ),
         ] = None,
+        fetch_openapi_from_remote: Annotated[
+            bool,
+            Doc(
+                """
+                If True and http_client is provided, fetch OpenAPI schema from remote /openapi.json instead of generating locally.
+                """
+            ),
+        ] = False,
         include_operations: Annotated[
             Optional[List[str]],
             Doc("List of operation IDs to include as MCP tools. Cannot be used with exclude_operations."),
@@ -137,6 +145,7 @@ class FastApiMCP:
         self._include_tags = include_tags
         self._exclude_tags = exclude_tags
         self._auth_config = auth_config
+        self.fetch_openapi_from_remote = fetch_openapi_from_remote
 
         if self._auth_config:
             self._auth_config = self._auth_config.model_validate(self._auth_config)
@@ -150,13 +159,28 @@ class FastApiMCP:
         self.setup_server()
 
     def setup_server(self) -> None:
-        openapi_schema = get_openapi(
-            title=self.fastapi.title,
-            version=self.fastapi.version,
-            openapi_version=self.fastapi.openapi_version,
-            description=self.fastapi.description,
-            routes=self.fastapi.routes,
-        )
+        import asyncio
+
+        openapi_schema = None
+        if self.fetch_openapi_from_remote and self._http_client:
+
+            async def fetch_openapi():
+                resp = await self._http_client.get("/openapi.json")
+                resp.raise_for_status()
+                return resp.json()
+
+            try:
+                openapi_schema = asyncio.get_event_loop().run_until_complete(fetch_openapi())
+            except Exception as e:
+                logger.error(f"Failed to fetch remote OpenAPI schema: {e}. Falling back to local generation.")
+        if openapi_schema is None:
+            openapi_schema = get_openapi(
+                title=self.fastapi.title,
+                version=self.fastapi.version,
+                openapi_version=self.fastapi.openapi_version,
+                description=self.fastapi.description,
+                routes=self.fastapi.routes,
+            )
 
         all_tools, self.operation_map = convert_openapi_to_mcp_tools(
             openapi_schema,
