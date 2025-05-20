@@ -375,6 +375,8 @@ class FastApiMCP:
         Returns:
             The result as MCP content types
         """
+        logger.debug(f"FastAPI-MCP: Received call_tool request. Tool: {tool_name}, Arguments: {json.dumps(arguments)}")
+
         if tool_name not in operation_map:
             raise Exception(f"Unknown tool: {tool_name}")
 
