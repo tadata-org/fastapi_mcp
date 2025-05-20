@@ -413,6 +413,13 @@ class FastApiMCP:
             elif "authorization" in http_request_info.headers:
                 headers["Authorization"] = http_request_info.headers["authorization"]
 
+        # NEW: Check arguments for a user_access_token if Authorization header is still missing
+        if "Authorization" not in headers and arguments and "user_access_token" in arguments:
+            token = arguments.pop("user_access_token", None)  # Remove it from arguments so it doesn't become body
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+                logger.debug("Set Authorization header from 'user_access_token' in tool arguments.")
+
         body = arguments if arguments else None
 
         try:
