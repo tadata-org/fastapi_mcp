@@ -110,8 +110,7 @@ class FastApiMCP:
             Doc("List of tags to exclude from MCP tools. Cannot be used with include_tags."),
         ] = None,
         max_tool_name_length: Annotated[
-             Optional[int],
-             Doc("Maximum length allowed for tools (some vendors prohibit long names).")
+            Optional[int], Doc("Maximum length allowed for tools (some vendors prohibit long names).")
         ] = None,
         auth_config: Annotated[
             Optional[AuthConfig],
@@ -541,6 +540,12 @@ class FastApiMCP:
             long_operations = {
                 tool.name for tool in tools if len(self.get_combined_full_name(tool.name)) > self._max_tool_name_length
             }
+
+            if long_operations:
+                logger.warning(
+                    f"Some operations exceed allowed max tool name length of {str(self._max_tool_name_length)} characters: {long_operations}"
+                )
+
             operations_to_include = operations_to_include - long_operations
 
         filtered_tools = [tool for tool in tools if tool.name in operations_to_include]
