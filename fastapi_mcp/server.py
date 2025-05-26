@@ -145,7 +145,7 @@ class FastApiMCP:
         self._include_tags = include_tags
         self._exclude_tags = exclude_tags
         self._auth_config = auth_config
-        self.fetch_openapi_from_remote = fetch_openapi_from_remote
+        self._fetch_openapi_from_remote = fetch_openapi_from_remote
 
         if self._auth_config:
             self._auth_config = self._auth_config.model_validate(self._auth_config)
