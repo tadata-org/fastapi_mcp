@@ -165,7 +165,8 @@ class FastApiMCP:
         if self.fetch_openapi_from_remote and self._http_client:
 
             async def fetch_openapi():
-                resp = await self._http_client.get("/openapi.json")
+                openapi_url = getattr(self.fastapi, "openapi_url", "/openapi.json")
+                resp = await self._http_client.get(openapi_url)
                 resp.raise_for_status()
                 return resp.json()
 
