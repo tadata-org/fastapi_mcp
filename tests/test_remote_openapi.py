@@ -22,7 +22,7 @@ def test_fetch_openapi_from_remote(monkeypatch):
     client = MockAsyncClient()
     mcp = FastApiMCP(app, http_client=client, fetch_openapi_from_remote=True)
     # The openapi schema should be fetched from remote
-    assert mcp.tools is not None
+    assert mcp.tools == []  # tools should be an empty list since paths is empty
     assert mcp.operation_map is not None
     # The schema should match what the mock returned
     assert mcp.operation_map == {}  # since paths is empty
