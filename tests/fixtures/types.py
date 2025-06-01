@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from enum import Enum
@@ -95,6 +96,7 @@ class Product(BaseModel):
     updated_at: Optional[datetime] = None
     is_available: bool = True
     metadata: Dict[str, Any] = {}
+    related_products: Optional[List[Product]] = None
 
 
 class OrderItem(BaseModel):
