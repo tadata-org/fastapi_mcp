@@ -97,4 +97,4 @@ Join [MCParty Slack community](https://join.slack.com/t/themcparty/shared_invite
 
 ## License
 
-MIT License. Copyright (c) 2024 Tadata Inc.
+MIT License. Copyright (c) 2025 Tadata Inc.
