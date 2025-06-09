@@ -66,7 +66,8 @@
     },
     "logo": {
       "light": "/media/dark_logo.png",
-      "dark": "/media/light_logo.png"
+      "dark": "/media/light_logo.png",
+      "href": "https://tadata.com/"
     },
     "navbar": {
         "primary": {
