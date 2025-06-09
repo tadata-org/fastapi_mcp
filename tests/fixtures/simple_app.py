@@ -1,18 +1,15 @@
-from typing import Optional, List
+from typing import Optional, List, Any
 
 from fastapi import FastAPI, Query, Path, Body, HTTPException
 import pytest
 
+from tests.fixtures.conftest import make_fastapi_app_base
+
 from .types import Item
 
 
-def make_simple_fastapi_app() -> FastAPI:
-    app = FastAPI(
-        title="Test API",
-        description="A test API app for unit testing",
-        version="0.1.0",
-    )
-
+def make_simple_fastapi_app(parametrized_config: dict[str, Any] | None = None) -> FastAPI:
+    app = make_fastapi_app_base(parametrized_config=parametrized_config)
     items = [
         Item(id=1, name="Item 1", price=10.0, tags=["tag1", "tag2"], description="Item 1 description"),
         Item(id=2, name="Item 2", price=20.0, tags=["tag2", "tag3"]),
@@ -70,3 +67,8 @@ def make_simple_fastapi_app() -> FastAPI:
 @pytest.fixture
 def simple_fastapi_app() -> FastAPI:
     return make_simple_fastapi_app()
+
+
+@pytest.fixture
+def simple_fastapi_app_with_root_path() -> FastAPI:
+    return make_simple_fastapi_app(parametrized_config={"root_path": "/api/v1"})
