@@ -32,6 +32,10 @@
 - **ASGI transport** - Uses FastAPI's ASGI interface directly for efficient communication
 
 
+## Hosted Solution
+
+If you prefer a managed hosted solution check out [tadata.com](https://tadata.com).
+
 ## Installation
 
 We recommend using [uv](https://docs.astral.sh/uv/), a fast Python package installer:
@@ -79,6 +83,7 @@ FastAPI-MCP is designed as a native extension of FastAPI, not just a converter t
 - **Unified infrastructure**: Your FastAPI app doesn't need to run separately from the MCP server (though [separate deployment](https://fastapi-mcp.tadata.com/advanced/deploy#deploying-separately-from-original-fastapi-app) is also supported)
 
 This design philosophy ensures minimum friction when adding MCP capabilities to your existing FastAPI services.
+
 
 ## Development and Contributing
 
