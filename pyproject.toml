@@ -70,3 +70,13 @@ target-version = "py312"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = "test_*.py"
+
+[tool.uv]
+dev-dependencies = [
+    "mypy>=1.16.0",
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.0.0",
+    "ruff>=0.11.13",
+    "coverage>=7.8.2",
+    "pytest-cov>=6.1.1",
+]
