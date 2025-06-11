@@ -16,6 +16,42 @@ def get_single_param_type_from_schema(param_schema: Dict[str, Any]) -> str:
     return param_schema.get("type", "string")
 
 
+def simplify_union_schema(param_schema: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Simplify a union schema to a single schema for MCP compatibility.
+    Preserves important properties like 'items' for arrays.
+
+    Args:
+        param_schema: The parameter schema that may contain anyOf/oneOf
+
+    Returns:
+        A simplified schema with a single type
+    """
+    # Return as-is if not a union
+    if "anyOf" not in param_schema and "oneOf" not in param_schema:
+        return param_schema
+
+    # Get union schemas
+    union_schemas = param_schema.get("anyOf", param_schema.get("oneOf", []))
+
+    # Filter out null types
+    non_null_schemas = [s for s in union_schemas if s.get("type") != "null"]
+
+    if not non_null_schemas:
+        # All schemas were null, return string as default
+        return {"type": "string"}
+
+    # Use the first non-null schema, preserving all its properties
+    result = non_null_schemas[0].copy()
+
+    # Preserve important properties from parent schema
+    for key in ["title", "description", "default"]:
+        if key in param_schema and key not in result:
+            result[key] = param_schema[key]
+
+    return result
+
+
 def resolve_schema_references(schema_part: Dict[str, Any], reference_schema: Dict[str, Any]) -> Dict[str, Any]:
     """
     Resolve schema references in OpenAPI schemas.

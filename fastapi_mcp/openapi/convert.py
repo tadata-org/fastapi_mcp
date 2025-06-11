@@ -9,6 +9,7 @@ from .utils import (
     generate_example_from_schema,
     resolve_schema_references,
     get_single_param_type_from_schema,
+    simplify_union_schema,
 )
 
 logger = logging.getLogger(__name__)
@@ -219,7 +220,10 @@ def convert_openapi_to_mcp_tools(
                 param_desc = param.get("description", "")
                 param_required = param.get("required", False)
 
-                properties[param_name] = param_schema.copy()
+                # Simplify union schemas to single type for MCP compatibility
+                simplified_schema = simplify_union_schema(param_schema)
+
+                properties[param_name] = simplified_schema.copy()
                 properties[param_name]["title"] = param_name
                 if param_desc:
                     properties[param_name]["description"] = param_desc
@@ -227,7 +231,7 @@ def convert_openapi_to_mcp_tools(
                 if "type" not in properties[param_name]:
                     properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
 
-                if "default" in param_schema:
+                if "default" in param_schema and "default" not in properties[param_name]:
                     properties[param_name]["default"] = param_schema["default"]
 
                 if param_required:
@@ -239,7 +243,10 @@ def convert_openapi_to_mcp_tools(
                 param_desc = param.get("description", "")
                 param_required = param.get("required", False)
 
-                properties[param_name] = param_schema.copy()
+                # Simplify union schemas to single type for MCP compatibility
+                simplified_schema = simplify_union_schema(param_schema)
+
+                properties[param_name] = simplified_schema.copy()
                 properties[param_name]["title"] = param_name
                 if param_desc:
                     properties[param_name]["description"] = param_desc
@@ -247,7 +254,7 @@ def convert_openapi_to_mcp_tools(
                 if "type" not in properties[param_name]:
                     properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
 
-                if "default" in param_schema:
+                if "default" in param_schema and "default" not in properties[param_name]:
                     properties[param_name]["default"] = param_schema["default"]
 
                 if param_required:
