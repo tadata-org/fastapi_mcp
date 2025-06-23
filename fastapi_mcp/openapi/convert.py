@@ -46,6 +46,11 @@ def convert_openapi_to_mcp_tools(
                 logger.warning(f"Skipping non-HTTP method: {method}")
                 continue
 
+            is_deprecated = operation.get("deprecated", False)
+            if is_deprecated:
+                logger.warning(f"Skipping deprecated operation: {method} {path}")
+                continue
+
             # Get operation metadata
             operation_id = operation.get("operationId")
             if not operation_id:
