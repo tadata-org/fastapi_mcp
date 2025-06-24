@@ -21,6 +21,7 @@ def fastapi_mcp(simple_fastapi_app: FastAPI) -> FastApiMCP:
     mcp.mount()
     return mcp
 
+
 @pytest.fixture
 def fastapi_mcp_with_custom_header(simple_fastapi_app: FastAPI) -> FastApiMCP:
     mcp = FastApiMCP(
@@ -31,6 +32,7 @@ def fastapi_mcp_with_custom_header(simple_fastapi_app: FastAPI) -> FastApiMCP:
     )
     mcp.mount()
     return mcp
+
 
 @pytest.fixture
 def lowlevel_server_simple_app(fastapi_mcp: FastApiMCP) -> Server:
@@ -326,9 +328,7 @@ async def test_headers_passthrough_to_tool_handler(fastapi_mcp: FastApiMCP):
 
 
 @pytest.mark.asyncio
-async def test_custom_header_passthrough_to_tool_handler(
-    fastapi_mcp_with_custom_header: FastApiMCP
-):
+async def test_custom_header_passthrough_to_tool_handler(fastapi_mcp_with_custom_header: FastApiMCP):
     from unittest.mock import patch, MagicMock
     from fastapi_mcp.types import HTTPRequestInfo
 
