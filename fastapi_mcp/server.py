@@ -110,6 +110,10 @@ class FastApiMCP:
             Optional[List[str]],
             Doc("List of tags to exclude from MCP tools. Cannot be used with include_tags."),
         ] = None,
+        auto_generate_prompts: Annotated[
+            bool,
+            Doc("Whether to automatically generate default prompts for each tool. Defaults to True."),
+        ] = True,
         auth_config: Annotated[
             Optional[AuthConfig],
             Doc("Configuration for MCP authentication"),
@@ -138,6 +142,7 @@ class FastApiMCP:
         self._exclude_operations = exclude_operations
         self._include_tags = include_tags
         self._exclude_tags = exclude_tags
+        self._auto_generate_prompts = auto_generate_prompts
         self._auth_config = auth_config
 
         if self._auth_config:
@@ -172,8 +177,9 @@ class FastApiMCP:
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
 
-        # Auto-register default prompts for each tool
-        self.prompt_registry.auto_register_tool_prompts(self.tools, self.operation_map)
+        # Auto-register default prompts for each tool if enabled
+        if self._auto_generate_prompts:
+            self.prompt_registry.auto_register_tool_prompts(self.tools, self.operation_map)
 
         mcp_server: LowlevelMCPServer = LowlevelMCPServer(self.name, self.description)
 

@@ -74,7 +74,7 @@ FastAPI-MCP automatically generates helpful prompts for each of your API endpoin
 
 ### Auto-Generated Tool Prompts
 
-Every FastAPI endpoint automatically gets a corresponding prompt (named `use_{endpoint_name}`) that provides AI models with guidance on how to use that specific tool:
+By default, every FastAPI endpoint automatically gets a corresponding prompt (named `use_{endpoint_name}`) that provides AI models with guidance on how to use that specific tool:
 
 ```python
 from fastapi import FastAPI
@@ -87,11 +87,28 @@ async def create_item(name: str, price: float):
     """Create a new item in the inventory."""
     return {"name": name, "price": price}
 
-mcp = FastApiMCP(app)
+# Auto-generation is enabled by default
+mcp = FastApiMCP(app, auto_generate_prompts=True)  # This is the default
 mcp.mount()
 
 # Automatically creates a prompt named "use_create_item" with guidance
 # on how to use the create_item tool effectively
+```
+
+#### Controlling Auto-Generation
+
+You have full control over prompt auto-generation:
+
+```python
+# Option 1: Auto-generated prompts only (default)
+mcp = FastApiMCP(app, auto_generate_prompts=True)
+
+# Option 2: Disable auto-generation, use only custom prompts  
+mcp = FastApiMCP(app, auto_generate_prompts=False)
+
+# Option 3: Mixed approach - auto-generated + custom overrides
+mcp = FastApiMCP(app, auto_generate_prompts=True)
+# Then add custom prompts or override auto-generated ones
 ```
 
 ### Custom Prompt Overrides

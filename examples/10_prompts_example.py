@@ -1,9 +1,14 @@
 """
 Example demonstrating MCP Prompts support in FastAPI-MCP.
 
-This example shows how to create prompt templates that can be used by MCP clients
-to generate structured messages for AI models. It focuses on API-related prompts
-including auto-generated tool prompts and custom overrides.
+This example shows:
+1. How to create custom prompt templates for AI interactions
+2. Three different approaches to controlling prompt auto-generation:
+   - Auto-generated prompts only (default)
+   - Custom prompts only (disabled auto-generation)
+   - Mixed approach (auto-generated + custom overrides)
+3. API-related prompts including tool guidance and troubleshooting
+4. How to override auto-generated prompts with enhanced custom versions
 """
 
 from typing import Optional
@@ -18,8 +23,23 @@ app = FastAPI(
     title="Prompts Example API", description="An example API demonstrating MCP Prompts functionality", version="1.0.0"
 )
 
-# Create MCP server (this will auto-generate prompts for all API endpoints)
-mcp = FastApiMCP(app)
+# Create MCP server with auto-generated prompts enabled (default: True)
+# Set auto_generate_prompts=False to disable auto-generation and only use custom prompts
+mcp = FastApiMCP(app, auto_generate_prompts=True)
+
+# ===== PROMPT CONTROL OPTIONS =====
+# This example demonstrates three different approaches to managing prompts:
+#
+# Option 1: Auto-generated prompts only (default behavior)
+# mcp = FastApiMCP(app, auto_generate_prompts=True)  # This is what we're using above
+#
+# Option 2: Custom prompts only (no auto-generation)
+# mcp = FastApiMCP(app, auto_generate_prompts=False)
+# # Then define only custom prompts with @mcp.prompt()
+#
+# Option 3: Mixed approach (auto-generated + custom overrides)
+# mcp = FastApiMCP(app, auto_generate_prompts=True)  # Auto-generate for all tools
+# # Then override specific ones or add additional custom prompts
 
 
 # Regular FastAPI endpoints (these will get auto-generated prompts)
@@ -52,10 +72,15 @@ def welcome_prompt():
     )
 
 
-# Example 2: Custom tool prompt override (overrides auto-generated prompt)
+# Example 2: Custom tool prompt override (demonstrates Option 3: Mixed approach)
+# This overrides the auto-generated prompt for the create_item tool
 @mcp.prompt("use_create_item", title="Create Item Tool Guide", description="Custom guidance for creating items")
 def create_item_guide():
-    """Override the default auto-generated prompt for the create_item tool."""
+    """Override the default auto-generated prompt for the create_item tool.
+
+    This demonstrates how you can enhance auto-generated prompts with custom,
+    domain-specific guidance while keeping auto-generation for other tools.
+    """
     return PromptMessage(
         role="user",
         content=TextContent(
@@ -86,6 +111,9 @@ price: 45.99
 ```
 
 This tool will create the item and return the generated item with its assigned details.
+
+**Note**: This is a custom override of the auto-generated prompt. The other endpoints
+(health_check, list_items) will use their auto-generated prompts for guidance.
             """
         ),
     )
@@ -198,11 +226,96 @@ Please provide specific, actionable advice based on the error details above.
     )
 
 
+# ===== DEMONSTRATION OF ALL THREE CONTROL OPTIONS =====
+
+
+def demonstrate_prompt_control_options():
+    """
+    This function demonstrates all three prompt control options.
+    Uncomment the sections below to try different approaches.
+    """
+
+    # ===== OPTION 1: Auto-generated prompts only =====
+    # This is what we're using in the main example above
+    print("Current setup: Auto-generated prompts enabled (default)")
+    print("- Creates 'use_health_check', 'use_list_items', 'use_create_item' prompts automatically")
+    print("- 'use_create_item' is overridden with our custom version")
+    print("- Also includes custom prompts: 'welcome', 'api_documentation', 'troubleshoot'")
+
+    """
+    # ===== OPTION 2: Custom prompts only =====
+    # Uncomment this section to try custom-only approach
+    
+    from fastapi import FastAPI
+    
+    app_custom = FastAPI(title="Custom Prompts Only API")
+    
+    @app_custom.get("/users")
+    def list_users(): return [{"id": 1, "name": "User 1"}]
+    
+    @app_custom.post("/users") 
+    def create_user(name: str): return {"id": 2, "name": name}
+    
+    # Disable auto-generation
+    mcp_custom = FastApiMCP(app_custom, auto_generate_prompts=False)
+    
+    @mcp_custom.prompt("user_management_help")
+    def user_help():
+        return PromptMessage(
+            role="user",
+            content=TextContent(text="Help me manage users effectively...")
+        )
+    
+    @mcp_custom.prompt("create_user_workflow")
+    def user_workflow():
+        return PromptMessage(
+            role="user", 
+            content=TextContent(text="Guide me through user creation...")
+        )
+    
+    mcp_custom.mount("/custom-mcp")
+    print("Custom-only setup would have only 2 prompts: user_management_help, create_user_workflow")
+    """
+
+    """
+    # ===== OPTION 3: Mixed approach (what we're demonstrating above) =====
+    # This is the approach used in our main example:
+    # - Auto-generate prompts for all tools (auto_generate_prompts=True)
+    # - Override specific auto-generated prompts (use_create_item)
+    # - Add additional custom prompts (welcome, api_documentation, troubleshoot)
+    
+    # This gives you:
+    # Auto-generated: use_health_check, use_list_items, use_create_item (overridden)
+    # Custom: welcome, api_documentation, troubleshoot, use_create_item (custom version)
+    """
+
+
 # Mount the MCP server (this will auto-generate prompts for all tools)
 mcp.mount()
 
-
+# Print information about the current setup
 if __name__ == "__main__":
+    print("\n" + "=" * 60)
+    print("FastAPI-MCP Prompts Example")
+    print("=" * 60)
+
+    demonstrate_prompt_control_options()
+
+    print(f"\nTotal prompts available: {len(mcp.prompt_registry.get_prompt_list())}")
+    print("\nPrompt names:")
+    for prompt in mcp.prompt_registry.get_prompt_list():
+        prompt_type = "Auto-generated" if prompt.name.startswith("use_") else "Custom"
+        if prompt.name == "use_create_item":
+            prompt_type += " (Overridden)"
+        print(f"  - {prompt.name} ({prompt_type})")
+
+    print("\n" + "=" * 60)
+    print("Choose your preferred approach:")
+    print("1. Auto-generated only: FastApiMCP(app, auto_generate_prompts=True)")
+    print("2. Custom only: FastApiMCP(app, auto_generate_prompts=False)")
+    print("3. Mixed (current): Auto-generate + custom overrides/additions")
+    print("=" * 60)
+
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
