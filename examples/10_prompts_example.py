@@ -57,20 +57,19 @@ def code_review_prompt(code: str, language: str = "python", focus: str = "all"):
         content=TextContent(
             text=f"""Please review this {language} code:
 
-```{language}
-{code}
-```
+            ```{language}
+            {code}
+            ```
 
-{instruction}
+            {instruction}
 
-Please provide:
-1. Overall assessment
-2. Specific issues found (if any)
-3. Improvement suggestions
-4. Best practices recommendations
-"""
-        ),
-    )
+            Please provide:
+            1. Overall assessment
+            2. Specific issues found (if any)
+            3. Improvement suggestions
+            4. Best practices recommendations
+            """),
+        )
 
 
 # Example 3: Multi-message prompt (conversation starter)
@@ -110,16 +109,15 @@ def api_docs_prompt(endpoint_path: Optional[str] = None):
             content=TextContent(
                 text=f"""Help me understand this API:
 
-Available endpoints:
-{chr(10).join(routes_info)}
+                Available endpoints:
+                {chr(10).join(routes_info)}
 
-Please provide:
-1. Overview of the API's purpose
-2. How to use each endpoint effectively
-3. Authentication requirements (if any)
-4. Common workflows and examples
-"""
-            ),
+                Please provide:
+                1. Overview of the API's purpose
+                2. How to use each endpoint effectively
+                3. Authentication requirements (if any)
+                4. Common workflows and examples
+                """),
         )
 
 
@@ -141,18 +139,17 @@ async def troubleshoot_prompt(error_message: str, endpoint: Optional[str] = None
         content=TextContent(
             text=f"""I'm experiencing an issue with this API:
 
-{context}
+            {context}
 
-Please help me:
-1. Understand what might be causing this error
-2. Suggest troubleshooting steps
-3. Provide solutions or workarounds
-4. Recommend preventive measures
+            Please help me:
+            1. Understand what might be causing this error
+            2. Suggest troubleshooting steps
+            3. Provide solutions or workarounds
+            4. Recommend preventive measures
 
-Please be specific and provide actionable advice.
-"""
-        ),
-    )
+            Please be specific and provide actionable advice.
+            """),
+        )
 
 
 # Example 5: Prompt with image content (for future multi-modal support)
