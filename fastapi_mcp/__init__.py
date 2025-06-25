@@ -13,11 +13,17 @@ except Exception:  # pragma: no cover
     __version__ = "0.0.0.dev0"  # pragma: no cover
 
 from .server import FastApiMCP
-from .types import AuthConfig, OAuthMetadata
+from .types import AuthConfig, OAuthMetadata, PromptMessage, TextContent, ImageContent, AudioContent
+from .prompts import PromptRegistry
 
 
 __all__ = [
     "FastApiMCP",
     "AuthConfig",
     "OAuthMetadata",
+    "PromptMessage",
+    "TextContent",
+    "ImageContent",
+    "AudioContent",
+    "PromptRegistry",
 ]

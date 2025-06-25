@@ -11,6 +11,7 @@ import mcp.types as types
 from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
 from fastapi_mcp.transport.sse import FastApiSseTransport
 from fastapi_mcp.types import HTTPRequestInfo, AuthConfig
+from fastapi_mcp.prompts import PromptRegistry
 
 import logging
 
@@ -124,6 +125,7 @@ class FastApiMCP:
         self.operation_map: Dict[str, Dict[str, Any]]
         self.tools: List[types.Tool]
         self.server: Server
+        self.prompt_registry: PromptRegistry
 
         self.fastapi = fastapi
         self.name = name or self.fastapi.title or "FastAPI MCP"
@@ -146,6 +148,9 @@ class FastApiMCP:
             base_url=self._base_url,
             timeout=10.0,
         )
+
+        # Initialize prompt registry
+        self.prompt_registry = PromptRegistry()
 
         self.setup_server()
 
@@ -185,7 +190,33 @@ class FastApiMCP:
                 http_request_info=http_request_info,
             )
 
+        # Add prompt handlers
+        @mcp_server.list_prompts()
+        async def handle_list_prompts() -> List[types.Prompt]:
+            return self.prompt_registry.get_prompt_list()
+
+        @mcp_server.get_prompt()
+        async def handle_get_prompt(name: str, arguments: Optional[Dict[str, Any]] = None) -> types.GetPromptResult:
+            messages = await self.prompt_registry.get_prompt(name, arguments)
+            return types.GetPromptResult(description=f"Prompt: {name}", messages=messages)
+
         self.server = mcp_server
+
+    def prompt(self, name: str, title: Optional[str] = None, description: Optional[str] = None):
+        """
+        Decorator to register a prompt function.
+
+        Args:
+            name: Unique identifier for the prompt
+            title: Human-readable title for the prompt
+            description: Description of what the prompt does
+
+        Example:
+            @mcp.prompt("code_review", title="Code Review", description="Review code for issues")
+            async def code_review(code: str, language: str = "python"):
+                return [PromptMessage(role="user", content=TextContent(text=f"Review this {language} code: {code}"))]
+        """
+        return self.prompt_registry.register_prompt(name, title, description)
 
     def _register_mcp_connection_endpoint_sse(
         self,
