@@ -2,7 +2,8 @@
 Example demonstrating MCP Prompts support in FastAPI-MCP.
 
 This example shows how to create prompt templates that can be used by MCP clients
-to generate structured messages for AI models.
+to generate structured messages for AI models. It focuses on API-related prompts
+including auto-generated tool prompts and custom overrides.
 """
 
 from typing import Optional
@@ -14,65 +15,84 @@ from examples.shared.setup import setup_logging
 setup_logging()
 
 app = FastAPI(
-    title="Prompts Example API", description="An example API demonstrating MCP Prompts functionality", version="1.0.0"
+    title="Prompts Example API", 
+    description="An example API demonstrating MCP Prompts functionality", 
+    version="1.0.0"
 )
 
-# Create MCP server
+# Create MCP server (this will auto-generate prompts for all API endpoints)
 mcp = FastApiMCP(app)
 
 
-# Regular FastAPI endpoint
+# Regular FastAPI endpoints (these will get auto-generated prompts)
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
 
 
-# Example 1: Simple prompt without parameters
+@app.get("/items")
+async def list_items(skip: int = 0, limit: int = 10):
+    """List all items with pagination."""
+    # This would return actual items in a real app
+    return [{"id": i, "name": f"Item {i}"} for i in range(skip, skip + limit)]
+
+
+@app.post("/items")
+async def create_item(name: str, description: str, price: float):
+    """Create a new item."""
+    return {"id": 123, "name": name, "description": description, "price": price}
+
+
+# Example 1: Basic welcome prompt 
 @mcp.prompt("welcome", title="Welcome Message", description="Generate a friendly welcome message")
 def welcome_prompt():
-    """Generate a welcome message."""
+    """Generate a welcome message for API users."""
     return PromptMessage(
         role="user",
         content=TextContent(text="Please provide a warm and friendly welcome message for new users of our API."),
     )
 
 
-# Example 2: Prompt with parameters
-@mcp.prompt("code_review", title="Code Review Assistant", description="Request code review with specific focus areas")
-def code_review_prompt(code: str, language: str = "python", focus: str = "all"):
-    """Generate a code review prompt with customizable parameters."""
-    focus_instructions = {
-        "performance": "Focus on performance optimizations and efficiency improvements.",
-        "security": "Focus on security vulnerabilities and best practices.",
-        "style": "Focus on code style, readability, and formatting.",
-        "bugs": "Focus on finding potential bugs and logical errors.",
-        "all": "Provide comprehensive review covering all aspects.",
-    }
-
-    instruction = focus_instructions.get(focus, focus_instructions["all"])
-
+# Example 2: Custom tool prompt override (overrides auto-generated prompt)
+@mcp.prompt("use_create_item", title="Create Item Tool Guide", description="Custom guidance for creating items")
+def create_item_guide():
+    """Override the default auto-generated prompt for the create_item tool."""
     return PromptMessage(
         role="user",
         content=TextContent(
-            text=f"""Please review this {language} code:
+            text="""Use the create_item tool to add new items to the inventory system.
 
-            ```{language}
-            {code}
-            ```
+**Best Practices:**
+1. Always provide a unique, descriptive name for new items
+2. Include a clear, detailed description explaining the item's purpose
+3. Set a reasonable price (must be greater than 0)
+4. Consider the target audience when naming and describing items
 
-            {instruction}
+**Parameter Guidelines:**
+- **name**: Use clear, concise naming (e.g., "Wireless Bluetooth Headphones")
+- **description**: Be specific about features and use cases
+- **price**: Use decimal format for currency (e.g., 29.99)
 
-            Please provide:
-            1. Overall assessment
-            2. Specific issues found (if any)
-            3. Improvement suggestions
-            4. Best practices recommendations
+**Common Issues to Avoid:**
+- Vague or unclear item names
+- Missing or incomplete descriptions  
+- Negative or zero prices
+- Duplicate item names
+
+**Example:**
+```
+name: "Professional Wireless Mouse"
+description: "Ergonomic wireless mouse with precision tracking, suitable for office work and gaming"
+price: 45.99
+```
+
+This tool will create the item and return the generated item with its assigned details.
             """),
         )
 
 
-# Example 3: Multi-message prompt (conversation starter)
+# Example 3: API documentation prompt
 @mcp.prompt(
     "api_documentation",
     title="API Documentation Helper",
@@ -81,56 +101,71 @@ def code_review_prompt(code: str, language: str = "python", focus: str = "all"):
 def api_docs_prompt(endpoint_path: Optional[str] = None):
     """Generate prompts for API documentation help."""
     if endpoint_path:
-        return [
-            PromptMessage(
-                role="user",
-                content=TextContent(text=f"Please explain how to use the {endpoint_path} endpoint in detail."),
-            ),
-            PromptMessage(
-                role="assistant",
-                content=TextContent(
-                    text="I'd be happy to help you understand this API endpoint. Let me analyze it for you."
-                ),
-            ),
-            PromptMessage(
-                role="user", content=TextContent(text="Please include request/response examples and common use cases.")
-            ),
-        ]
+        return PromptMessage(
+            role="user",
+            content=TextContent(
+                text=f"""Please provide comprehensive documentation for the {endpoint_path} endpoint.
+
+Include the following details:
+1. **Purpose**: What this endpoint does and when to use it
+2. **HTTP Method**: GET, POST, PUT, DELETE, etc.
+3. **Parameters**: All required and optional parameters with types and descriptions
+4. **Request Examples**: Sample requests with proper formatting
+5. **Response Format**: Expected response structure and data types
+6. **Status Codes**: Possible HTTP status codes and their meanings
+7. **Error Handling**: Common errors and how to resolve them
+8. **Use Cases**: Practical examples of when to use this endpoint
+
+Make the documentation clear and actionable for developers.
+                """),
+        )
     else:
         # Generate dynamic content based on current API routes
         routes_info = []
         for route in app.routes:
             if hasattr(route, "methods") and hasattr(route, "path"):
-                methods = ", ".join(route.methods)
-                routes_info.append(f"- {methods} {route.path}")
+                # Filter out internal routes
+                if not route.path.startswith("/mcp") and route.path != "/docs" and route.path != "/openapi.json":
+                    methods = ", ".join(m for m in route.methods if m != "HEAD")
+                    routes_info.append(f"- {methods} {route.path}")
 
         return PromptMessage(
             role="user",
             content=TextContent(
-                text=f"""Help me understand this API:
+                text=f"""Help me understand this API and create comprehensive documentation.
 
-                Available endpoints:
-                {chr(10).join(routes_info)}
+**Available API Endpoints:**
+{chr(10).join(routes_info)}
 
-                Please provide:
-                1. Overview of the API's purpose
-                2. How to use each endpoint effectively
-                3. Authentication requirements (if any)
-                4. Common workflows and examples
+Please provide:
+1. **API Overview**: Purpose and main functionality of this API
+2. **Getting Started**: How to begin using the API
+3. **Endpoint Guide**: Brief description of what each endpoint does
+4. **Common Workflows**: Step-by-step guides for typical use cases
+5. **Best Practices**: Recommendations for effective API usage
+6. **Error Handling**: How to handle common errors and edge cases
+
+**Focus Areas:**
+- Make it beginner-friendly but comprehensive
+- Include practical examples
+- Explain the relationships between different endpoints
+- Provide guidance on proper usage patterns
+
+Note: This API also supports MCP (Model Context Protocol) prompts to help with tool usage.
                 """),
         )
 
 
-# Example 4: Dynamic prompt using app state
+# Example 4: API troubleshooting prompt
 @mcp.prompt("troubleshoot", title="API Troubleshooting Assistant", description="Help troubleshoot API issues")
 async def troubleshoot_prompt(error_message: str, endpoint: Optional[str] = None, status_code: Optional[int] = None):
     """Generate troubleshooting prompts based on error information."""
-    context_parts = [f"Error message: {error_message}"]
+    context_parts = [f"**Error Message**: {error_message}"]
 
     if endpoint:
-        context_parts.append(f"Endpoint: {endpoint}")
+        context_parts.append(f"**Endpoint**: {endpoint}")
     if status_code:
-        context_parts.append(f"Status code: {status_code}")
+        context_parts.append(f"**Status Code**: {status_code}")
 
     context = "\n".join(context_parts)
 
@@ -139,41 +174,29 @@ async def troubleshoot_prompt(error_message: str, endpoint: Optional[str] = None
         content=TextContent(
             text=f"""I'm experiencing an issue with this API:
 
-            {context}
+{context}
 
-            Please help me:
-            1. Understand what might be causing this error
-            2. Suggest troubleshooting steps
-            3. Provide solutions or workarounds
-            4. Recommend preventive measures
+Please help me troubleshoot this issue:
 
-            Please be specific and provide actionable advice.
+1. **Root Cause Analysis**: What might be causing this error?
+2. **Immediate Steps**: What should I check first?
+3. **Resolution**: How can I fix this specific issue?
+4. **Prevention**: How can I avoid this error in the future?
+5. **Alternative Approaches**: Are there other ways to achieve the same goal?
+
+**Additional Context to Consider:**
+- Check if all required parameters are provided
+- Verify parameter types and formats
+- Ensure proper authentication if required
+- Confirm the endpoint URL is correct
+- Review any rate limiting or quota restrictions
+
+Please provide specific, actionable advice based on the error details above.
             """),
         )
 
 
-# Example 5: Prompt with image content (for future multi-modal support)
-@mcp.prompt(
-    "visual_analysis", title="Visual Content Analyzer", description="Analyze visual content with custom instructions"
-)
-def visual_analysis_prompt(analysis_type: str = "general", specific_focus: Optional[str] = None):
-    """Generate prompts for visual content analysis."""
-    base_instruction = {
-        "general": "Please provide a comprehensive analysis of this image.",
-        "technical": "Please analyze the technical aspects of this image (composition, lighting, etc.).",
-        "content": "Please describe the content and context of this image in detail.",
-        "accessibility": "Please provide an accessibility-focused description of this image.",
-    }
-
-    instruction = base_instruction.get(analysis_type, base_instruction["general"])
-
-    if specific_focus:
-        instruction += f" Pay special attention to: {specific_focus}"
-
-    return PromptMessage(role="user", content=TextContent(text=instruction))
-
-
-# Mount the MCP server
+# Mount the MCP server (this will auto-generate prompts for all tools)
 mcp.mount()
 
 

@@ -68,6 +68,98 @@ mcp.mount()
 
 That's it! Your auto-generated MCP server is now available at `https://app.base.url/mcp`.
 
+## MCP Prompts Support
+
+FastAPI-MCP automatically generates helpful prompts for each of your API endpoints and supports custom prompts for enhanced AI interactions.
+
+### Auto-Generated Tool Prompts
+
+Every FastAPI endpoint automatically gets a corresponding prompt (named `use_{endpoint_name}`) that provides AI models with guidance on how to use that specific tool:
+
+```python
+from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
+
+app = FastAPI()
+
+@app.post("/create_item")
+async def create_item(name: str, price: float):
+    """Create a new item in the inventory."""
+    return {"name": name, "price": price}
+
+mcp = FastApiMCP(app)
+mcp.mount()
+
+# Automatically creates a prompt named "use_create_item" with guidance
+# on how to use the create_item tool effectively
+```
+
+### Custom Prompt Overrides
+
+You can override auto-generated prompts or create entirely custom ones:
+
+```python
+# Override the auto-generated prompt for better guidance
+@mcp.prompt("use_create_item", title="Item Creation Guide")
+def create_item_guide():
+    return PromptMessage(
+        role="user",
+        content=TextContent(
+            text="""Use the create_item tool to add items to inventory.
+
+Best Practices:
+- Use descriptive names (e.g., "Wireless Bluetooth Mouse")
+- Set realistic prices in decimal format (e.g., 29.99)
+- Include detailed descriptions for better categorization
+
+This tool will validate inputs and return the created item details."""
+        )
+    )
+```
+
+### API Documentation Prompts
+
+Create dynamic prompts that help with API understanding:
+
+```python
+@mcp.prompt("api_documentation")
+def api_docs_prompt(endpoint_path: Optional[str] = None):
+    if endpoint_path:
+        return PromptMessage(
+            role="user",
+            content=TextContent(
+                text=f"Please provide comprehensive documentation for {endpoint_path}, including parameters, examples, and use cases."
+            )
+        )
+    else:
+        # Generate overview of all endpoints
+        return PromptMessage(
+            role="user", 
+            content=TextContent(text="Please explain this API's purpose and how to use its endpoints effectively.")
+        )
+```
+
+### Welcome and Troubleshooting Prompts
+
+```python
+@mcp.prompt("welcome")
+def welcome_prompt():
+    return PromptMessage(
+        role="user",
+        content=TextContent(text="Please provide a friendly welcome message for API users.")
+    )
+
+@mcp.prompt("troubleshoot")  
+async def troubleshoot_prompt(error_message: str, endpoint: Optional[str] = None):
+    return PromptMessage(
+        role="user",
+        content=TextContent(
+            text=f"Help troubleshoot this API issue: {error_message}" + 
+                 (f" on endpoint {endpoint}" if endpoint else "")
+        )
+    )
+```
+
 ## Documentation, Examples and Advanced Usage
 
 FastAPI-MCP provides [comprehensive documentation](https://fastapi-mcp.tadata.com/). Additionaly, check out the [examples directory](examples) for code samples demonstrating these features in action.

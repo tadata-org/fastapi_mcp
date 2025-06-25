@@ -10,7 +10,7 @@ from typing import Callable, List, Dict, Any, Optional, get_type_hints, Union
 from inspect import signature, Parameter, iscoroutinefunction
 import mcp.types as types
 
-from .types import PromptMessage, PromptArgument
+from .types import PromptMessage, PromptArgument, TextContent
 
 logger = logging.getLogger(__name__)
 
@@ -199,3 +199,96 @@ class PromptRegistry:
     def has_prompts(self) -> bool:
         """Check if any prompts are registered."""
         return len(self.prompts) > 0
+
+    def auto_register_tool_prompts(self, tools: List[types.Tool], operation_map: Dict[str, Dict[str, Any]]) -> None:
+        """
+        Automatically register default prompts for each tool.
+        
+        Args:
+            tools: List of MCP tools to create prompts for
+            operation_map: Mapping of operation IDs to operation details
+        """
+        for tool in tools:
+            prompt_name = f"use_{tool.name}"
+            
+            # Skip if user has already registered a custom prompt with this name
+            if prompt_name in self.prompts:
+                logger.debug(f"Skipping auto-registration for {prompt_name} - custom prompt exists")
+                continue
+            
+            # Generate prompt content for this tool
+            prompt_content = self._generate_tool_prompt_content(tool, operation_map.get(tool.name, {}))
+            
+            # Create a simple prompt function
+            def create_tool_prompt(content: str):
+                def tool_prompt_func():
+                    return PromptMessage(role="user", content=TextContent(type="text", text=content))
+                return tool_prompt_func
+            
+            # Register the auto-generated prompt
+            self.prompts[prompt_name] = {
+                "name": prompt_name,
+                "title": f"How to use {tool.name}",
+                "description": f"Instructions for using the {tool.name} tool effectively",
+                "arguments": [],
+                "func": create_tool_prompt(prompt_content),
+                "input_schema": {"type": "object", "properties": {}, "required": []},
+                "auto_generated": True
+            }
+            
+            logger.debug(f"Auto-registered prompt: {prompt_name}")
+
+    def _generate_tool_prompt_content(self, tool: types.Tool, operation_info: Dict[str, Any]) -> str:
+        """
+        Generate helpful prompt content for a tool.
+        
+        Args:
+            tool: The MCP tool to generate content for
+            operation_info: Operation details from the operation map
+            
+        Returns:
+            Generated prompt content as a string
+        """
+        content_parts = [f"Use the {tool.name} tool to execute this API operation."]
+        
+        # Add tool description if available
+        if tool.description:
+            content_parts.append(f"\n**Purpose**: {tool.description}")
+        
+        # Add HTTP method and path if available
+        if operation_info:
+            method = operation_info.get("method", "").upper()
+            path = operation_info.get("path", "")
+            if method and path:
+                content_parts.append(f"\n**Endpoint**: {method} {path}")
+        
+        # Add parameter information
+        if hasattr(tool, 'inputSchema') and tool.inputSchema:
+            schema = tool.inputSchema
+            if isinstance(schema, dict) and "properties" in schema:
+                properties = schema["properties"]
+                required = schema.get("required", [])
+                
+                if properties:
+                    content_parts.append("\n**Parameters**:")
+                    for param_name, param_schema in properties.items():
+                        param_type = param_schema.get("type", "unknown")
+                        param_desc = param_schema.get("description", "")
+                        required_marker = " (required)" if param_name in required else " (optional)"
+                        
+                        param_line = f"- **{param_name}** ({param_type}){required_marker}"
+                        if param_desc:
+                            param_line += f": {param_desc}"
+                        content_parts.append(param_line)
+        
+        # Add usage instructions
+        content_parts.extend([
+            "\n**Instructions**:",
+            "1. Review the parameters and their requirements",
+            "2. Provide all required parameters with appropriate values", 
+            "3. Optional parameters can be omitted or set to null",
+            "4. Execute the tool with the prepared arguments",
+            "\n**Note**: This is an auto-generated prompt. For more specific guidance on using this tool, please refer to the API documentation or contact the development team."
+        ])
+        
+        return "\n".join(content_parts)
