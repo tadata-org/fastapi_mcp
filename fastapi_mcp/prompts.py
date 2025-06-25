@@ -203,28 +203,29 @@ class PromptRegistry:
     def auto_register_tool_prompts(self, tools: List[types.Tool], operation_map: Dict[str, Dict[str, Any]]) -> None:
         """
         Automatically register default prompts for each tool.
-        
+
         Args:
             tools: List of MCP tools to create prompts for
             operation_map: Mapping of operation IDs to operation details
         """
         for tool in tools:
             prompt_name = f"use_{tool.name}"
-            
+
             # Skip if user has already registered a custom prompt with this name
             if prompt_name in self.prompts:
                 logger.debug(f"Skipping auto-registration for {prompt_name} - custom prompt exists")
                 continue
-            
+
             # Generate prompt content for this tool
             prompt_content = self._generate_tool_prompt_content(tool, operation_map.get(tool.name, {}))
-            
+
             # Create a simple prompt function
             def create_tool_prompt(content: str):
                 def tool_prompt_func():
                     return PromptMessage(role="user", content=TextContent(type="text", text=content))
+
                 return tool_prompt_func
-            
+
             # Register the auto-generated prompt
             self.prompts[prompt_name] = {
                 "name": prompt_name,
@@ -233,19 +234,19 @@ class PromptRegistry:
                 "arguments": [],
                 "func": create_tool_prompt(prompt_content),
                 "input_schema": {"type": "object", "properties": {}, "required": []},
-                "auto_generated": True
+                "auto_generated": True,
             }
-            
+
             logger.debug(f"Auto-registered prompt: {prompt_name}")
 
     def _generate_tool_prompt_content(self, tool: types.Tool, operation_info: Dict[str, Any]) -> str:
         """
         Generate helpful prompt content for a tool.
-        
+
         Args:
             tool: The MCP tool to generate content for
             operation_info: Operation details from the operation map
-            
+
         Returns:
             Generated prompt content as a string
         """
@@ -270,7 +271,7 @@ class PromptRegistry:
             "• Use appropriate data formats (strings, numbers, booleans)",
             "• Consider edge cases and boundary conditions",
             "",
-            "💡 **Pro Tip**: The tool description and schema contain all technical details. Focus on using parameters that are relevant to the user's specific request and goals."
+            "💡 **Pro Tip**: The tool description and schema contain all technical details. Focus on using parameters that are relevant to the user's specific request and goals.",
         ]
-        
+
         return "\n".join(content_parts)

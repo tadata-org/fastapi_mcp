@@ -15,9 +15,7 @@ from examples.shared.setup import setup_logging
 setup_logging()
 
 app = FastAPI(
-    title="Prompts Example API", 
-    description="An example API demonstrating MCP Prompts functionality", 
-    version="1.0.0"
+    title="Prompts Example API", description="An example API demonstrating MCP Prompts functionality", version="1.0.0"
 )
 
 # Create MCP server (this will auto-generate prompts for all API endpoints)
@@ -44,7 +42,7 @@ async def create_item(name: str, description: str, price: float):
     return {"id": 123, "name": name, "description": description, "price": price}
 
 
-# Example 1: Basic welcome prompt 
+# Example 1: Basic welcome prompt
 @mcp.prompt("welcome", title="Welcome Message", description="Generate a friendly welcome message")
 def welcome_prompt():
     """Generate a welcome message for API users."""
@@ -88,8 +86,9 @@ price: 45.99
 ```
 
 This tool will create the item and return the generated item with its assigned details.
-            """),
-        )
+            """
+        ),
+    )
 
 
 # Example 3: API documentation prompt
@@ -117,7 +116,8 @@ Include the following details:
 8. **Use Cases**: Practical examples of when to use this endpoint
 
 Make the documentation clear and actionable for developers.
-                """),
+                """
+            ),
         )
     else:
         # Generate dynamic content based on current API routes
@@ -152,7 +152,8 @@ Please provide:
 - Provide guidance on proper usage patterns
 
 Note: This API also supports MCP (Model Context Protocol) prompts to help with tool usage.
-                """),
+                """
+            ),
         )
 
 
@@ -192,8 +193,9 @@ Please help me troubleshoot this issue:
 - Review any rate limiting or quota restrictions
 
 Please provide specific, actionable advice based on the error details above.
-            """),
-        )
+            """
+        ),
+    )
 
 
 # Mount the MCP server (this will auto-generate prompts for all tools)
