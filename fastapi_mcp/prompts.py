@@ -228,8 +228,8 @@ class PromptRegistry:
             # Register the auto-generated prompt
             self.prompts[prompt_name] = {
                 "name": prompt_name,
-                "title": f"How to use {tool.name}",
-                "description": f"Instructions for using the {tool.name} tool effectively",
+                "title": f"Usage Guide: {tool.name}",
+                "description": f"Best practices and guidance for using the {tool.name} tool effectively",
                 "arguments": [],
                 "func": create_tool_prompt(prompt_content),
                 "input_schema": {"type": "object", "properties": {}, "required": []},
@@ -249,46 +249,28 @@ class PromptRegistry:
         Returns:
             Generated prompt content as a string
         """
-        content_parts = [f"Use the {tool.name} tool to execute this API operation."]
-        
-        # Add tool description if available
-        if tool.description:
-            content_parts.append(f"\n**Purpose**: {tool.description}")
-        
-        # Add HTTP method and path if available
-        if operation_info:
-            method = operation_info.get("method", "").upper()
-            path = operation_info.get("path", "")
-            if method and path:
-                content_parts.append(f"\n**Endpoint**: {method} {path}")
-        
-        # Add parameter information
-        if hasattr(tool, 'inputSchema') and tool.inputSchema:
-            schema = tool.inputSchema
-            if isinstance(schema, dict) and "properties" in schema:
-                properties = schema["properties"]
-                required = schema.get("required", [])
-                
-                if properties:
-                    content_parts.append("\n**Parameters**:")
-                    for param_name, param_schema in properties.items():
-                        param_type = param_schema.get("type", "unknown")
-                        param_desc = param_schema.get("description", "")
-                        required_marker = " (required)" if param_name in required else " (optional)"
-                        
-                        param_line = f"- **{param_name}** ({param_type}){required_marker}"
-                        if param_desc:
-                            param_line += f": {param_desc}"
-                        content_parts.append(param_line)
-        
-        # Add usage instructions
-        content_parts.extend([
-            "\n**Instructions**:",
-            "1. Review the parameters and their requirements",
-            "2. Provide all required parameters with appropriate values", 
-            "3. Optional parameters can be omitted or set to null",
-            "4. Execute the tool with the prepared arguments",
-            "\n**Note**: This is an auto-generated prompt. For more specific guidance on using this tool, please refer to the API documentation or contact the development team."
-        ])
+        # Focus on actionable guidance rather than repeating tool information
+        content_parts = [
+            f"You are about to use the **{tool.name}** tool.",
+            "",
+            "**Key Guidelines:**",
+            "• Review the tool's description and parameter requirements carefully",
+            "• Provide all required parameters with appropriate values",
+            "• Use relevant data that matches the user's actual needs and context",
+            "• Check the expected response format before interpreting results",
+            "",
+            "**Best Practices:**",
+            "• Validate your inputs match the expected parameter types",
+            "• Use values that make sense for the user's specific request",
+            "• Handle potential errors gracefully",
+            "• Consider the business logic and constraints of the operation",
+            "",
+            "**Execution Tips:**",
+            "• Double-check required vs optional parameters",
+            "• Use appropriate data formats (strings, numbers, booleans)",
+            "• Consider edge cases and boundary conditions",
+            "",
+            "💡 **Pro Tip**: The tool description and schema contain all technical details. Focus on using parameters that are relevant to the user's specific request and goals."
+        ]
         
         return "\n".join(content_parts)
