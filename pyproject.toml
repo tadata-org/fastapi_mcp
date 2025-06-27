@@ -36,6 +36,7 @@ dependencies = [
     "httpx>=0.24.0",
     "requests>=2.25.0",
     "tomli>=2.2.1",
+    "websockets>=15.0.1",
 ]
 
 [dependency-groups]

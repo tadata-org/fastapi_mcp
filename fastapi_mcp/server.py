@@ -3,13 +3,14 @@ import httpx
 from typing import Dict, Optional, Any, List, Union, Callable, Awaitable, Iterable, Literal, Sequence
 from typing_extensions import Annotated, Doc
 
-from fastapi import FastAPI, Request, APIRouter, params
+from fastapi import FastAPI, Request, APIRouter, params, WebSocket
 from fastapi.openapi.utils import get_openapi
 from mcp.server.lowlevel.server import Server
 import mcp.types as types
 
 from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
 from fastapi_mcp.transport.sse import FastApiSseTransport
+from fastapi_mcp.transport.websocket import FastApiWebSocketTransport
 from fastapi_mcp.types import HTTPRequestInfo, AuthConfig
 
 import logging
@@ -230,6 +231,32 @@ class FastApiMCP:
         self._register_mcp_connection_endpoint_sse(router, transport, mount_path, dependencies)
         self._register_mcp_messages_endpoint_sse(router, transport, mount_path, dependencies)
 
+    def _register_mcp_connection_endpoint_websocket(
+        self,
+        router: FastAPI | APIRouter,
+        transport: FastApiWebSocketTransport,
+        mount_path: str,
+        dependencies: Optional[Sequence[params.Depends]],
+    ):
+        @router.websocket(mount_path, dependencies=dependencies)
+        async def handle_mcp_websocket(websocket: WebSocket):
+            async with transport.connect_websocket(websocket) as (reader, writer):
+                await self.server.run(
+                    reader,
+                    writer,
+                    self.server.create_initialization_options(notification_options=None, experimental_capabilities={}),
+                    raise_exceptions=False,
+                )
+
+    def _register_mcp_endpoints_websocket(
+        self,
+        router: FastAPI | APIRouter,
+        transport: FastApiWebSocketTransport,
+        mount_path: str,
+        dependencies: Optional[Sequence[params.Depends]],
+    ):
+        self._register_mcp_connection_endpoint_websocket(router, transport, mount_path, dependencies)
+
     def _setup_auth_2025_03_26(self):
         from fastapi_mcp.auth.proxy import (
             setup_oauth_custom_metadata,
@@ -304,10 +331,10 @@ class FastApiMCP:
             ),
         ] = "/mcp",
         transport: Annotated[
-            Literal["sse"],
+            Literal["sse", "websocket"],
             Doc(
                 """
-                The transport type for the MCP server. Currently only 'sse' is supported.
+                The transport type for the MCP server. Supports 'sse' and 'websocket'.
                 """
             ),
         ] = "sse",
@@ -335,15 +362,17 @@ class FastApiMCP:
         else:
             raise ValueError(f"Invalid router type: {type(router)}")
 
-        messages_path = f"{base_path}{mount_path}/messages/"
-
-        sse_transport = FastApiSseTransport(messages_path)
-
+        # Create transport based on the specified type
         dependencies = self._auth_config.dependencies if self._auth_config else None
 
         if transport == "sse":
+            messages_path = f"{base_path}{mount_path}/messages/"
+            sse_transport = FastApiSseTransport(messages_path)
             self._register_mcp_endpoints_sse(router, sse_transport, mount_path, dependencies)
-        else:  # pragma: no cover
+        elif transport == "websocket":
+            websocket_transport = FastApiWebSocketTransport()
+            self._register_mcp_endpoints_websocket(router, websocket_transport, mount_path, dependencies)
+        else:
             raise ValueError(f"Invalid transport: {transport}")  # pragma: no cover
 
         self._setup_auth()
