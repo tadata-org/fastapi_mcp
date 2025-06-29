@@ -93,6 +93,14 @@ class FastApiMCP:
                 """
             ),
         ] = None,
+        http_headers: Annotated[
+            Optional[List[str]],
+            Doc(
+                """
+                Optional list of headers to forward to the API calls. Headers are case-insensitive.
+                """
+            ),
+        ] = None,
         include_operations: Annotated[
             Optional[List[str]],
             Doc("List of operation IDs to include as MCP tools. Cannot be used with exclude_operations."),
@@ -146,6 +154,9 @@ class FastApiMCP:
             base_url=self._base_url,
             timeout=10.0,
         )
+
+        self._http_headers_lowercase_set = { h.lower() for h in http_headers or [] }
+        self._http_headers_lowercase_set.add("authorization")
 
         self.setup_server()
 
@@ -407,11 +418,11 @@ class FastApiMCP:
                     raise ValueError(f"Parameter name is None for parameter: {param}")
                 headers[param_name] = arguments.pop(param_name)
 
+        # Add headers that we want to forward.
         if http_request_info and http_request_info.headers:
-            if "Authorization" in http_request_info.headers:
-                headers["Authorization"] = http_request_info.headers["Authorization"]
-            elif "authorization" in http_request_info.headers:
-                headers["Authorization"] = http_request_info.headers["authorization"]
+            for k, v in http_request_info.headers.items():
+                if k.lower() in self._http_headers_lowercase_set:
+                    headers[k] = v
 
         body = arguments if arguments else None
 
