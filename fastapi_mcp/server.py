@@ -35,13 +35,7 @@ class LowlevelMCPServer(Server):
 
             async def handler(req: types.CallToolRequest):
                 try:
-                    # Pull the original HTTP request info from the MCP message. It was injected in
-                    # `FastApiSseTransport.handle_fastapi_post_message()`
-                    if hasattr(req.params, "_http_request_info") and req.params._http_request_info is not None:
-                        http_request_info = HTTPRequestInfo.model_validate(req.params._http_request_info)
-                        results = await func(req.params.name, (req.params.arguments or {}), http_request_info)
-                    else:
-                        results = await func(req.params.name, (req.params.arguments or {}))
+                    results = await func(req.params.name, (req.params.arguments or {}))
                     return types.ServerResult(types.CallToolResult(content=list(results), isError=False))
                 except Exception as e:
                     return types.ServerResult(
@@ -188,6 +182,20 @@ class FastApiMCP:
         async def handle_call_tool(
             name: str, arguments: Dict[str, Any], http_request_info: Optional[HTTPRequestInfo] = None
         ) -> List[Union[types.TextContent, types.ImageContent, types.EmbeddedResource]]:
+            request = self.server.request_context.request
+
+            http_request_info = None
+            if request:
+                body = await request.body()
+                http_request_info = HTTPRequestInfo(
+                    method=request.method,
+                    path=request.url.path,
+                    headers=dict(request.headers),
+                    cookies=request.cookies,
+                    query_params=dict(request.query_params),
+                    body=body.decode(),
+                )
+
             return await self._execute_api_tool(
                 client=self._http_client,
                 tool_name=name,
