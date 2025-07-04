@@ -382,3 +382,61 @@ class ClientRegistrationResponse(BaseType):
     grant_types: List[str]
     token_endpoint_auth_method: str
     client_name: str
+
+
+# MCP Prompts Support
+class PromptArgument(BaseType):
+    """Argument definition for MCP prompts"""
+
+    name: str
+    description: Optional[str] = None
+    required: bool = False
+
+
+class TextContent(BaseType):
+    """Text content for prompt messages"""
+
+    type: Literal["text"] = "text"
+    text: str
+
+
+class ImageContent(BaseType):
+    """Image content for prompt messages"""
+
+    type: Literal["image"] = "image"
+    data: str  # base64 encoded
+    mimeType: str
+
+
+class AudioContent(BaseType):
+    """Audio content for prompt messages"""
+
+    type: Literal["audio"] = "audio"
+    data: str  # base64 encoded
+    mimeType: str
+
+
+class ResourceContent(BaseType):
+    """Resource content for prompt messages"""
+
+    type: Literal["resource"] = "resource"
+    resource: Dict[str, Any]
+
+
+PromptContent = Union[TextContent, ImageContent, AudioContent, ResourceContent]
+
+
+class PromptMessage(BaseType):
+    """Message in a prompt conversation"""
+
+    role: Literal["user", "assistant"]
+    content: PromptContent
+
+
+class PromptDefinition(BaseType):
+    """Complete prompt definition"""
+
+    name: str
+    title: Optional[str] = None
+    description: Optional[str] = None
+    arguments: List[PromptArgument] = []
