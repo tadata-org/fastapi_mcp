@@ -4,8 +4,6 @@ from uuid import UUID
 from fastapi import FastAPI, Query, Path, Body, Header, Cookie
 import pytest
 
-from tests.fixtures.conftest import make_fastapi_app_base
-
 from .types import (
     Product,
     Customer,
@@ -21,9 +19,12 @@ def make_complex_fastapi_app(
     example_product: Product,
     example_customer: Customer,
     example_order_response: OrderResponse,
-    parametrized_config: dict[str, Any] | None = None,
 ) -> FastAPI:
-    app = make_fastapi_app_base(parametrized_config=parametrized_config)
+    app = FastAPI(
+        title="Complex E-Commerce API",
+        description="A more complex API with nested models and various schemas",
+        version="1.0.0",
+    )
 
     @app.get(
         "/products",

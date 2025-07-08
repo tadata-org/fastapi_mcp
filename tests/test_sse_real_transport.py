@@ -9,7 +9,6 @@ import sys
 import threading
 import coverage
 from typing import AsyncGenerator, Generator
-from fastapi import FastAPI
 from mcp.client.session import ClientSession
 from mcp.client.sse import sse_client
 from mcp import InitializeResult
@@ -19,12 +18,26 @@ import httpx
 import uvicorn
 from fastapi_mcp import FastApiMCP
 
+from .fixtures.simple_app import make_simple_fastapi_app
+
 
 HOST = "127.0.0.1"
 SERVER_NAME = "Test MCP Server"
 
 
-def run_server(server_port: int, fastapi_app: FastAPI) -> None:
+@pytest.fixture
+def server_port() -> int:
+    with socket.socket() as s:
+        s.bind((HOST, 0))
+        return s.getsockname()[1]
+
+
+@pytest.fixture
+def server_url(server_port: int) -> str:
+    return f"http://{HOST}:{server_port}"
+
+
+def run_server(server_port: int) -> None:
     # Initialize coverage for subprocesses
     cov = None
     if "COVERAGE_PROCESS_START" in os.environ:
@@ -59,15 +72,16 @@ def run_server(server_port: int, fastapi_app: FastAPI) -> None:
         save_thread.start()
 
     # Configure the server
+    fastapi = make_simple_fastapi_app()
     mcp = FastApiMCP(
-        fastapi_app,
+        fastapi,
         name=SERVER_NAME,
         description="Test description",
     )
     mcp.mount()
 
     # Start the server
-    server = uvicorn.Server(config=uvicorn.Config(app=fastapi_app, host=HOST, port=server_port, log_level="error"))
+    server = uvicorn.Server(config=uvicorn.Config(app=fastapi, host=HOST, port=server_port, log_level="error"))
     server.run()
 
     # Give server time to start
@@ -80,24 +94,13 @@ def run_server(server_port: int, fastapi_app: FastAPI) -> None:
         cov.save()
 
 
-@pytest.fixture(params=["simple_fastapi_app", "simple_fastapi_app_with_root_path"])
-def server(request: pytest.FixtureRequest) -> Generator[str, None, None]:
+@pytest.fixture()
+def server(server_port: int) -> Generator[None, None, None]:
     # Ensure COVERAGE_PROCESS_START is set in the environment for subprocesses
     coverage_rc = os.path.abspath(".coveragerc")
     os.environ["COVERAGE_PROCESS_START"] = coverage_rc
 
-    # Get a free port
-    with socket.socket() as s:
-        s.bind((HOST, 0))
-        server_port = s.getsockname()[1]
-
-    # Run the server in a subprocess
-    fastapi_app = request.getfixturevalue(request.param)
-    proc = multiprocessing.Process(
-        target=run_server,
-        kwargs={"server_port": server_port, "fastapi_app": fastapi_app},
-        daemon=True,
-    )
+    proc = multiprocessing.Process(target=run_server, kwargs={"server_port": server_port}, daemon=True)
     proc.start()
 
     # Wait for server to be running
@@ -114,8 +117,7 @@ def server(request: pytest.FixtureRequest) -> Generator[str, None, None]:
     else:
         raise RuntimeError(f"Server failed to start after {max_attempts} attempts")
 
-    # Return the server URL
-    yield f"http://{HOST}:{server_port}{fastapi_app.root_path}"
+    yield
 
     # Signal the server to stop - added graceful shutdown before kill
     try:
@@ -132,8 +134,8 @@ def server(request: pytest.FixtureRequest) -> Generator[str, None, None]:
 
 
 @pytest.fixture()
-async def http_client(server: str) -> AsyncGenerator[httpx.AsyncClient, None]:
-    async with httpx.AsyncClient(base_url=server) as client:
+async def http_client(server: None, server_url: str) -> AsyncGenerator[httpx.AsyncClient, None]:
+    async with httpx.AsyncClient(base_url=server_url) as client:
         yield client
 
 
@@ -163,8 +165,8 @@ async def test_raw_sse_connection(http_client: httpx.AsyncClient) -> None:
 
 
 @pytest.mark.anyio
-async def test_sse_basic_connection(server: str) -> None:
-    async with sse_client(server + "/mcp") as streams:
+async def test_sse_basic_connection(server: None, server_url: str) -> None:
+    async with sse_client(server_url + "/mcp") as streams:
         async with ClientSession(*streams) as session:
             # Test initialization
             result = await session.initialize()
@@ -177,8 +179,8 @@ async def test_sse_basic_connection(server: str) -> None:
 
 
 @pytest.mark.anyio
-async def test_sse_tool_call(server: str) -> None:
-    async with sse_client(server + "/mcp") as streams:
+async def test_sse_tool_call(server: None, server_url: str) -> None:
+    async with sse_client(server_url + "/mcp") as streams:
         async with ClientSession(*streams) as session:
             await session.initialize()
 
