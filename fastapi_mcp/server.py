@@ -60,6 +60,24 @@ class LowlevelMCPServer(Server):
 class FastApiMCP:
     """
     Create an MCP server from a FastAPI app.
+
+    This class converts FastAPI endpoints into MCP tools, allowing LLMs to interact
+    with your API. It supports automatic operation ID shortening to ensure compatibility
+    with LLMs that have character limits for tool names.
+
+    Args:
+        fastapi: The FastAPI application to create an MCP server from
+        name: Name for the MCP server (defaults to app.title)
+        description: Description for the MCP server (defaults to app.description)
+        describe_all_responses: Whether to include all possible response schemas in tool descriptions
+        describe_full_response_schema: Whether to include full json schema for responses in tool descriptions
+        http_client: Optional custom HTTP client to use for API calls to the FastAPI app
+        include_operations: List of operation IDs to include as MCP tools
+        exclude_operations: List of operation IDs to exclude from MCP tools
+        include_tags: List of tags to include as MCP tools
+        exclude_tags: List of tags to exclude from MCP tools
+        auth_config: Configuration for MCP authentication
+        max_operation_id_length: Maximum length for operation IDs. IDs longer than this will be shortened. Defaults to 60.
     """
 
     def __init__(
@@ -113,6 +131,10 @@ class FastApiMCP:
             Optional[AuthConfig],
             Doc("Configuration for MCP authentication"),
         ] = None,
+        max_operation_id_length: Annotated[
+            Optional[int],
+            Doc("Maximum length for operation IDs. IDs longer than this will be shortened. Defaults to 60."),
+        ] = 60,
     ):
         # Validate operation and tag filtering options
         if include_operations is not None and exclude_operations is not None:
@@ -121,7 +143,12 @@ class FastApiMCP:
         if include_tags is not None and exclude_tags is not None:
             raise ValueError("Cannot specify both include_tags and exclude_tags")
 
+        # Validate max_operation_id_length
+        if max_operation_id_length is not None and max_operation_id_length <= 0:
+            raise ValueError("max_operation_id_length must be a positive integer")
+
         self.operation_map: Dict[str, Dict[str, Any]]
+        self.operation_id_mappings: Dict[str, str]  # Maps shortened IDs to original IDs
         self.tools: List[types.Tool]
         self.server: Server
 
@@ -137,6 +164,7 @@ class FastApiMCP:
         self._include_tags = include_tags
         self._exclude_tags = exclude_tags
         self._auth_config = auth_config
+        self._max_operation_id_length = max_operation_id_length
 
         if self._auth_config:
             self._auth_config = self._auth_config.model_validate(self._auth_config)
@@ -158,14 +186,21 @@ class FastApiMCP:
             routes=self.fastapi.routes,
         )
 
-        all_tools, self.operation_map = convert_openapi_to_mcp_tools(
+        all_tools, self.operation_map, self.operation_id_mappings = convert_openapi_to_mcp_tools(
             openapi_schema,
             describe_all_responses=self._describe_all_responses,
             describe_full_response_schema=self._describe_full_response_schema,
+            max_operation_id_length=self._max_operation_id_length,
         )
 
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
+
+        # Log operation ID mappings if any shortening occurred
+        if self.operation_id_mappings:
+            logger.debug(f"Operation ID shortening applied. {len(self.operation_id_mappings)} IDs were shortened:")
+            for shortened, original in self.operation_id_mappings.items():
+                logger.debug(f"  {original} -> {shortened}")
 
         mcp_server: LowlevelMCPServer = LowlevelMCPServer(self.name, self.description)
 
@@ -499,21 +534,46 @@ class FastApiMCP:
                         operations_by_tag[tag] = []
                     operations_by_tag[tag].append(operation_id)
 
+        # Create a reverse mapping from original to shortened operation IDs
+        original_to_shortened = {v: k for k, v in self.operation_id_mappings.items()}
+
         operations_to_include = set()
 
         if self._include_operations is not None:
-            operations_to_include.update(self._include_operations)
+            for op_id in self._include_operations:
+                # Check if this operation ID was shortened
+                if op_id in original_to_shortened:
+                    operations_to_include.add(original_to_shortened[op_id])
+                else:
+                    operations_to_include.add(op_id)
         elif self._exclude_operations is not None:
             all_operations = {tool.name for tool in tools}
-            operations_to_include.update(all_operations - set(self._exclude_operations))
+            excluded = set()
+            for op_id in self._exclude_operations:
+                # Check if this operation ID was shortened
+                if op_id in original_to_shortened:
+                    excluded.add(original_to_shortened[op_id])
+                else:
+                    excluded.add(op_id)
+            operations_to_include.update(all_operations - excluded)
 
         if self._include_tags is not None:
             for tag in self._include_tags:
-                operations_to_include.update(operations_by_tag.get(tag, []))
+                for original_op_id in operations_by_tag.get(tag, []):
+                    # Check if this operation ID was shortened
+                    if original_op_id in original_to_shortened:
+                        operations_to_include.add(original_to_shortened[original_op_id])
+                    else:
+                        operations_to_include.add(original_op_id)
         elif self._exclude_tags is not None:
             excluded_operations = set()
             for tag in self._exclude_tags:
-                excluded_operations.update(operations_by_tag.get(tag, []))
+                for original_op_id in operations_by_tag.get(tag, []):
+                    # Check if this operation ID was shortened
+                    if original_op_id in original_to_shortened:
+                        excluded_operations.add(original_to_shortened[original_op_id])
+                    else:
+                        excluded_operations.add(original_op_id)
 
             all_operations = {tool.name for tool in tools}
             operations_to_include.update(all_operations - excluded_operations)

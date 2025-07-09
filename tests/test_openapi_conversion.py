@@ -7,6 +7,7 @@ from fastapi_mcp.openapi.utils import (
     clean_schema_for_display,
     generate_example_from_schema,
     get_single_param_type_from_schema,
+    shorten_operation_id,
 )
 
 
@@ -19,7 +20,7 @@ def test_simple_app_conversion(simple_fastapi_app: FastAPI):
         routes=simple_fastapi_app.routes,
     )
 
-    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
+    tools, operation_map, _ = convert_openapi_to_mcp_tools(openapi_schema)
 
     assert len(tools) == 6
     assert len(operation_map) == 6
@@ -44,7 +45,7 @@ def test_complex_app_conversion(complex_fastapi_app: FastAPI):
         routes=complex_fastapi_app.routes,
     )
 
-    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
+    tools, operation_map, _ = convert_openapi_to_mcp_tools(openapi_schema)
 
     expected_operations = ["list_products", "get_product", "create_order", "get_customer"]
     assert len(tools) == len(expected_operations)
@@ -69,9 +70,9 @@ def test_describe_full_response_schema(simple_fastapi_app: FastAPI):
         routes=simple_fastapi_app.routes,
     )
 
-    tools_full, _ = convert_openapi_to_mcp_tools(openapi_schema, describe_full_response_schema=True)
+    tools_full, _, _ = convert_openapi_to_mcp_tools(openapi_schema, describe_full_response_schema=True)
 
-    tools_simple, _ = convert_openapi_to_mcp_tools(openapi_schema, describe_full_response_schema=False)
+    tools_simple, _, _ = convert_openapi_to_mcp_tools(openapi_schema, describe_full_response_schema=False)
 
     for i, tool in enumerate(tools_full):
         assert tool.description is not None
@@ -100,9 +101,9 @@ def test_describe_all_responses(complex_fastapi_app: FastAPI):
         routes=complex_fastapi_app.routes,
     )
 
-    tools_all, _ = convert_openapi_to_mcp_tools(openapi_schema, describe_all_responses=True)
+    tools_all, _, _ = convert_openapi_to_mcp_tools(openapi_schema, describe_all_responses=True)
 
-    tools_success, _ = convert_openapi_to_mcp_tools(openapi_schema, describe_all_responses=False)
+    tools_success, _, _ = convert_openapi_to_mcp_tools(openapi_schema, describe_all_responses=False)
 
     create_order_all = next(t for t in tools_all if t.name == "create_order")
     create_order_success = next(t for t in tools_success if t.name == "create_order")
@@ -167,7 +168,7 @@ def test_parameter_handling(complex_fastapi_app: FastAPI):
         routes=complex_fastapi_app.routes,
     )
 
-    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
+    tools, operation_map, _ = convert_openapi_to_mcp_tools(openapi_schema)
 
     list_products_tool = next(tool for tool in tools if tool.name == "list_products")
 
@@ -243,7 +244,7 @@ def test_request_body_handling(complex_fastapi_app: FastAPI):
     original_request_body = create_order_route["requestBody"]["content"]["application/json"]["schema"]
     original_properties = original_request_body.get("properties", {})
 
-    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
+    tools, operation_map, _ = convert_openapi_to_mcp_tools(openapi_schema)
 
     create_order_tool = next(tool for tool in tools if tool.name == "create_order")
 
@@ -318,7 +319,7 @@ def test_missing_type_handling(complex_fastapi_app: FastAPI):
             param["schema"].pop("type", None)
             break
 
-    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
+    tools, operation_map, _ = convert_openapi_to_mcp_tools(openapi_schema)
 
     get_product_tool = next(tool for tool in tools if tool.name == "get_product")
     get_product_props = get_product_tool.inputSchema["properties"]
@@ -350,7 +351,7 @@ def test_body_params_descriptions_and_defaults(complex_fastapi_app: FastAPI):
     item_schema["properties"]["product_id"]["description"] = "Test product ID description"
     item_schema["properties"]["quantity"]["default"] = 1
 
-    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+    tools, _, _ = convert_openapi_to_mcp_tools(openapi_schema)
 
     create_order_tool = next(tool for tool in tools if tool.name == "create_order")
     properties = create_order_tool.inputSchema["properties"]
@@ -406,7 +407,7 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     if "properties" in item_schema["properties"]["total"]:
         del item_schema["properties"]["total"]["properties"]
 
-    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+    tools, _, _ = convert_openapi_to_mcp_tools(openapi_schema)
 
     create_order_tool = next(tool for tool in tools if tool.name == "create_order")
     properties = create_order_tool.inputSchema["properties"]
@@ -422,3 +423,102 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     if "items" in properties:
         item_props = properties["items"]["items"]["properties"]
         assert "total" in item_props
+
+
+def test_shorten_operation_id_basic():
+    """Test basic operation ID shortening functionality."""
+    # Test case 1: ID within limit should not be shortened
+    short_id = "get_user"
+    assert shorten_operation_id(short_id, 50) == short_id
+
+    # Test case 2: Long ID should be shortened
+    long_id = "get_user_profile_api_v1_users_profiles_user_id_get"
+    shortened = shorten_operation_id(long_id, 40)  # Use 40 to ensure shortening happens
+    assert len(shortened) <= 40
+    assert shortened.startswith("get_user_profile")
+    assert "_get_" in shortened  # HTTP method should be present
+    assert "user_id" in shortened  # Most specific path segment should be preserved
+
+    # Test case 3: Very long function name
+    very_long_func = "get_user_profile_details_with_preferences_and_settings_api_v1_users_get"
+    shortened = shorten_operation_id(very_long_func, 40)
+    assert len(shortened) <= 40
+    assert "..." in shortened  # Should contain ellipsis for truncated function name
+
+
+def test_shorten_operation_id_edge_cases():
+    """Test edge cases for operation ID shortening."""
+    # Test case 1: No path segments
+    no_path = "create_user_post"
+    shortened = shorten_operation_id(no_path, 20)
+    assert len(shortened) <= 20
+    # With no shortening needed, it should remain the same
+    assert shortened == "create_user_post"
+
+    # Test case 2: Single character segments
+    single_char = "get_a_b_c_d_e_f_g_h_i_j_k_get"
+    shortened = shorten_operation_id(single_char, 25)
+    assert len(shortened) <= 25
+
+    # Test case 3: No HTTP method
+    no_method = "list_items_api_v1_items"
+    shortened = shorten_operation_id(no_method, 20)
+    assert len(shortened) <= 20
+
+    # Test case 4: Only HTTP method
+    only_method = "get"
+    assert shorten_operation_id(only_method, 10) == only_method
+
+    # Test case 5: Empty operation ID
+    assert shorten_operation_id("", 10) == ""
+
+
+def test_shorten_operation_id_hash_consistency():
+    """Test that hash generation is consistent."""
+    operation_id = "get_user_profile_api_v1_users_profiles_user_id_get"
+
+    # Same input should always produce the same hash
+    shortened1 = shorten_operation_id(operation_id, 40)
+    shortened2 = shorten_operation_id(operation_id, 40)
+    assert shortened1 == shortened2
+
+    # Extract hash from shortened ID (last 6 characters before final underscore)
+    hash1 = shortened1.split("_")[-1]
+    hash2 = shortened2.split("_")[-1]
+    assert hash1 == hash2
+    assert len(hash1) == 6
+
+
+def test_shorten_operation_id_different_lengths():
+    """Test shortening with different max lengths."""
+    operation_id = "get_user_profile_api_v1_users_profiles_user_id_get"
+
+    # Test with different limits
+    for max_length in [30, 40, 50, 60]:
+        shortened = shorten_operation_id(operation_id, max_length)
+        assert len(shortened) <= max_length
+
+    # Test with two lengths that both require shortening
+    short_limit = shorten_operation_id(operation_id, 30)
+    medium_limit = shorten_operation_id(operation_id, 40)
+
+    # Both shortened versions should have the same hash (last 6 chars)
+    assert short_limit[-6:] == medium_limit[-6:]
+
+    # The medium limit should preserve more path info
+    assert len(medium_limit) > len(short_limit)
+
+
+def test_shorten_operation_id_path_priority():
+    """Test that rightmost path segments are prioritized."""
+    operation_id = "get_data_api_v1_organizations_departments_employees_employee_id_get"
+    shortened = shorten_operation_id(operation_id, 50)
+
+    # Should prioritize rightmost segments
+    assert "employee_id" in shortened
+    assert "employees" in shortened or "departments" in shortened
+
+    # Should not include leftmost segments when space is limited
+    very_short = shorten_operation_id(operation_id, 35)
+    assert "api" not in very_short
+    assert "v1" not in very_short

@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 import mcp.types as types
 
@@ -9,6 +9,7 @@ from .utils import (
     generate_example_from_schema,
     resolve_schema_references,
     get_single_param_type_from_schema,
+    shorten_operation_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,8 @@ def convert_openapi_to_mcp_tools(
     openapi_schema: Dict[str, Any],
     describe_all_responses: bool = False,
     describe_full_response_schema: bool = False,
-) -> Tuple[List[types.Tool], Dict[str, Dict[str, Any]]]:
+    max_operation_id_length: Optional[int] = None,
+) -> Tuple[List[types.Tool], Dict[str, Dict[str, Any]], Dict[str, str]]:
     """
     Convert OpenAPI operations to MCP tools.
 
@@ -26,17 +28,23 @@ def convert_openapi_to_mcp_tools(
         openapi_schema: The OpenAPI schema
         describe_all_responses: Whether to include all possible response schemas in tool descriptions
         describe_full_response_schema: Whether to include full response schema in tool descriptions
+        max_operation_id_length: Maximum length for operation IDs. IDs longer than this will be shortened.
 
     Returns:
         A tuple containing:
         - A list of MCP tools
         - A mapping of operation IDs to operation details for HTTP execution
+        - A mapping of shortened operation IDs to original operation IDs (for debugging)
     """
     # Resolve all references in the schema at once
     resolved_openapi_schema = resolve_schema_references(openapi_schema, openapi_schema)
 
     tools = []
     operation_map = {}
+    operation_id_mappings = {}  # Maps shortened IDs to original IDs
+
+    # Track seen operation IDs for collision detection
+    seen_operation_ids = set()
 
     # Process each path in the OpenAPI schema
     for path, path_item in resolved_openapi_schema.get("paths", {}).items():
@@ -52,12 +60,36 @@ def convert_openapi_to_mcp_tools(
                 logger.warning(f"Skipping operation with no operationId: {operation}")
                 continue
 
+            # Store the original operation ID for mapping
+            original_operation_id = operation_id
+
+            # Apply shortening if max_operation_id_length is set
+            if max_operation_id_length is not None:
+                shortened_id = shorten_operation_id(operation_id, max_operation_id_length)
+                if shortened_id != operation_id:
+                    logger.debug(f"Shortened operation ID: {operation_id} -> {shortened_id}")
+                    # Store the mapping for debugging
+                    operation_id_mappings[shortened_id] = original_operation_id
+                operation_id = shortened_id
+
+            # Check for collisions
+            if operation_id in seen_operation_ids:
+                logger.warning(
+                    f"Collision detected! Operation ID '{operation_id}' already exists. "
+                    f"Original operation ID was '{original_operation_id}'. "
+                    f"Consider using unique operation IDs in your FastAPI app or adjusting max_operation_id_length."
+                )
+            else:
+                seen_operation_ids.add(operation_id)
+
             # Save operation details for later HTTP calls
+            # Use the shortened operation_id as the key, but store the original for reference
             operation_map[operation_id] = {
                 "path": path,
                 "method": method,
                 "parameters": operation.get("parameters", []),
                 "request_body": operation.get("requestBody", {}),
+                "original_operation_id": original_operation_id,
             }
 
             summary = operation.get("summary", "")
@@ -264,4 +296,11 @@ def convert_openapi_to_mcp_tools(
 
             tools.append(tool)
 
-    return tools, operation_map
+    # Log summary of operation ID shortening if it occurred
+    if operation_id_mappings:
+        logger.debug(
+            f"Operation ID shortening summary: {len(operation_id_mappings)} IDs shortened "
+            f"to fit within {max_operation_id_length} character limit"
+        )
+
+    return tools, operation_map, operation_id_mappings
