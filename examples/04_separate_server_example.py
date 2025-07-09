@@ -2,6 +2,7 @@
 This example shows how to run the MCP server and the FastAPI app separately.
 You can create an MCP server from one FastAPI app, and mount it to a different app.
 """
+
 from fastapi import FastAPI
 
 from examples.shared.apps.items import app
