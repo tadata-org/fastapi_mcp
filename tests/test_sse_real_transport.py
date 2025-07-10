@@ -91,9 +91,12 @@ def server(request: pytest.FixtureRequest) -> Generator[str, None, None]:
         s.bind((HOST, 0))
         server_port = s.getsockname()[1]
 
+    # Use fork method to avoid pickling issues
+    ctx = multiprocessing.get_context("fork")
+
     # Run the server in a subprocess
     fastapi_app = request.getfixturevalue(request.param)
-    proc = multiprocessing.Process(
+    proc = ctx.Process(
         target=run_server,
         kwargs={"server_port": server_port, "fastapi_app": fastapi_app},
         daemon=True,
