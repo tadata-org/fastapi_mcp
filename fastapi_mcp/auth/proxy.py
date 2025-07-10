@@ -199,8 +199,10 @@ def setup_oauth_authorize_proxy(
         if not scope:
             logger.warning("Client didn't provide any scopes! Using default scopes.")
             scope = default_scope
+            logger.debug(f"Default scope: {scope}")
 
         scopes = scope.split()
+        logger.debug(f"Scopes passed: {scopes}")
         for required_scope in default_scope.split():
             if required_scope not in scopes:
                 scopes.append(required_scope)
