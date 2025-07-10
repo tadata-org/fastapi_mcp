@@ -113,6 +113,15 @@ class FastApiMCP:
             Optional[AuthConfig],
             Doc("Configuration for MCP authentication"),
         ] = None,
+        headers: Annotated[
+            Optional[List[str]],
+            Doc(
+                """
+                List of HTTP header names to forward from the incoming MCP request into each tool invocation.
+                Only headers in this allowlist will be forwarded. Defaults to ['authorization'].
+                """
+            ),
+        ] = None,
     ):
         # Validate operation and tag filtering options
         if include_operations is not None and exclude_operations is not None:
@@ -146,6 +155,8 @@ class FastApiMCP:
             base_url=self._base_url,
             timeout=10.0,
         )
+
+        self._forward_headers = {h.lower() for h in (headers or ["Authorization"])}
 
         self.setup_server()
 
@@ -404,11 +415,12 @@ class FastApiMCP:
                     raise ValueError(f"Parameter name is None for parameter: {param}")
                 headers[param_name] = arguments.pop(param_name)
 
+        # Forward headers that are in the allowlist
         if http_request_info and http_request_info.headers:
-            if "Authorization" in http_request_info.headers:
-                headers["Authorization"] = http_request_info.headers["Authorization"]
-            elif "authorization" in http_request_info.headers:
-                headers["Authorization"] = http_request_info.headers["authorization"]
+            for name, value in http_request_info.headers.items():
+                # case-insensitive check for allowed headers
+                if name.lower() in self._forward_headers:
+                    headers[name] = value
 
         body = arguments if arguments else None
 

@@ -23,6 +23,18 @@ def fastapi_mcp(simple_fastapi_app: FastAPI) -> FastApiMCP:
 
 
 @pytest.fixture
+def fastapi_mcp_with_custom_header(simple_fastapi_app: FastAPI) -> FastApiMCP:
+    mcp = FastApiMCP(
+        simple_fastapi_app,
+        name="Test MCP Server with custom header",
+        description="Test description",
+        headers=["X-Custom-Header"],
+    )
+    mcp.mount()
+    return mcp
+
+
+@pytest.fixture
 def lowlevel_server_simple_app(fastapi_mcp: FastApiMCP) -> Server:
     return fastapi_mcp.server
 
@@ -311,5 +323,48 @@ async def test_headers_passthrough_to_tool_handler(fastapi_mcp: FastApiMCP):
 
         if mock_request.called:
             headers_arg = mock_request.call_args[0][4]  # headers are the 5th argument
-            assert "Authorization" in headers_arg
-            assert headers_arg["Authorization"] == "Bearer token456"
+            assert "authorization" in headers_arg
+            assert headers_arg["authorization"] == "Bearer token456"
+
+
+@pytest.mark.asyncio
+async def test_custom_header_passthrough_to_tool_handler(fastapi_mcp_with_custom_header: FastApiMCP):
+    from unittest.mock import patch, MagicMock
+    from fastapi_mcp.types import HTTPRequestInfo
+
+    # Test with custom header "X-Custom-Header"
+    with patch.object(fastapi_mcp_with_custom_header, "_request") as mock_request:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"result": "success"}'
+        mock_response.json.return_value = {"result": "success"}
+        mock_request.return_value = mock_response
+
+        http_request_info = HTTPRequestInfo(
+            method="POST",
+            path="/test",
+            headers={"X-Custom-Header": "MyValue123"},
+            cookies={},
+            query_params={},
+            body=None,
+        )
+
+        try:
+            # Call the _execute_api_tool method directly
+            # We don't care if it succeeds, just that _request gets the right headers
+            await fastapi_mcp_with_custom_header._execute_api_tool(
+                client=fastapi_mcp_with_custom_header._http_client,
+                tool_name="get_item",
+                arguments={"item_id": 1},
+                operation_map=fastapi_mcp_with_custom_header.operation_map,
+                http_request_info=http_request_info,
+            )
+        except Exception:
+            pass
+
+        assert mock_request.called, "The _request method was not called"
+
+        if mock_request.called:
+            headers_arg = mock_request.call_args[0][4]  # headers are the 5th argument
+            assert "X-Custom-Header" in headers_arg
+            assert headers_arg["X-Custom-Header"] == "MyValue123"
