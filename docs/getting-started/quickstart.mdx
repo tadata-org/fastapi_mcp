@@ -29,7 +29,7 @@ For more usage examples, see [Examples](https://github.com/tadata-org/fastapi_mc
 
 ## Running the server
 
-By running your FastAPI, your MCP will run at `https://app.base.url/mcp`. 
+By running your FastAPI, your MCP will run at `https://app.base.url/mcp`.
 
 For example, by using uvicorn, add to your code:
 ```python {9-11}
@@ -49,13 +49,30 @@ and run the server using `python fastapi_mcp_server.py`, which will serve you th
 
 ## Connecting a client to the MCP server
 
-Once your FastAPI app with MCP integration is running, you would want to connect it to an MCP client. 
+Once your FastAPI app with MCP integration is running, you would want to connect it to an MCP client.
 
 ### Connecting to the MCP Server using SSE
 
-For any MCP client supporting SSE, you will simply need to provide the MCP url.
+For any MCP client supporting SSE, you will simply need to provide the MCP url. Below are configuration examples for the most popular MCP clients:
 
-All the most popular MCP clients (Claude Desktop, Cursor & Windsurf) use the following config format:
+### Claude Desktop
+
+For more information, see [Anthropic's official documentation](https://docs.anthropic.com/en/docs/mcp).
+Claude Desktop uses the `url` parameter in its configuration. Example:
+
+```bash
+# Add the MCP server using the Claude CLI
+claude mcp add --transport sse fastapi-mcp http://localhost:8000/mcp
+
+# List all configured servers
+claude mcp list
+```
+
+
+### Cursor
+
+For more information, see [Cursor's official documentation](https://docs.cursor.com/context/model-context-protocol).
+Cursor uses the `url` parameter in its configuration. Example:
 
 ```json
 {
@@ -66,6 +83,23 @@ All the most popular MCP clients (Claude Desktop, Cursor & Windsurf) use the fol
   }
 }
 ```
+
+
+### Windsurf
+
+For more information, see [Windsurf's official documentation](https://docs.windsurf.com/windsurf/cascade/mcp).
+Windsurf uses the `serverUrl` parameter in its configuration. Example:
+
+```json
+{
+  "mcpServers": {
+    "fastapi-mcp": {
+      "serverUrl": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
 
 ### Connecting to the MCP Server using [mcp-remote](https://www.npmjs.com/package/mcp-remote)
 
