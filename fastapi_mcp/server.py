@@ -275,6 +275,7 @@ class FastApiMCP:
                     client_id=self._auth_config.client_id,
                     authorize_url=self._auth_config.authorize_url,
                     audience=self._auth_config.audience,
+                    default_scope=self._auth_config.default_scope,
                 )
                 if self._auth_config.setup_fake_dynamic_registration:
                     assert self._auth_config.client_secret is not None
