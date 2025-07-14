@@ -429,7 +429,8 @@ class FastApiMCP:
             logger.debug(f"Making {method.upper()} request to {path}")
             response = await self._request(client, method, path, query, headers, body)
 
-            # TODO: Better typing for the AsyncClientProtocol. It should return a ResponseProtocol that has a json() method that returns a dict/list/etc.
+            # TODO: Better typing for the AsyncClientProtocol. It should return a ResponseProtocol that has a json()
+            #  method that returns a dict/list/etc.
             try:
                 result = response.json()
                 result_text = json.dumps(result, indent=2, ensure_ascii=False)
@@ -439,8 +440,10 @@ class FastApiMCP:
                 else:
                     result_text = response.content
 
-            # If not raising an exception, the MCP server will return the result as a regular text response, without marking it as an error.
-            # TODO: Use a raise_for_status() method on the response (it needs to also be implemented in the AsyncClientProtocol)
+            # If not raising an exception, the MCP server will return the result as a regular text response,
+            # without marking it as an error.
+            # TODO: Use a raise_for_status() method on the response (it needs to also
+            #  be implemented in the AsyncClientProtocol)
             if 400 <= response.status_code < 600:
                 raise Exception(
                     f"Error calling {tool_name}. Status code: {response.status_code}. Response: {response.text}"
@@ -486,7 +489,7 @@ class FastApiMCP:
             openapi_schema: The OpenAPI schema
 
         Returns:
-            Filtered list of tools
+            list: Filtered list of tools
         """
         if (
             self._include_operations is None

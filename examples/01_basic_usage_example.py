@@ -1,4 +1,4 @@
-from examples.shared.apps.items import app # The FastAPI app
+from examples.shared.apps.items import app  # The FastAPI app
 from examples.shared.setup import setup_logging
 
 from fastapi_mcp import FastApiMCP
