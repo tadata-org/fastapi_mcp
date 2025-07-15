@@ -384,6 +384,8 @@ class FastApiMCP:
         Returns:
             The result as MCP content types
         """
+        logger.debug(f"FastAPI-MCP: Received call_tool request. Tool: {tool_name}, Arguments: {json.dumps(arguments)}")
+
         if tool_name not in operation_map:
             raise Exception(f"Unknown tool: {tool_name}")
 
@@ -422,6 +424,13 @@ class FastApiMCP:
                 # case-insensitive check for allowed headers
                 if name.lower() in self._forward_headers:
                     headers[name] = value
+
+        # NEW: Check arguments for a user_access_token if Authorization header is still missing
+        if "Authorization" not in headers and arguments and "user_access_token" in arguments:
+            token = arguments.pop("user_access_token", None)  # Remove it from arguments so it doesn't become body
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+                logger.debug("Set Authorization header from 'user_access_token' in tool arguments.")
 
         body = arguments if arguments else None
 
