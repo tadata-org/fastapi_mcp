@@ -21,7 +21,8 @@ In order to configure the auth header, the config file for the MCP server should
 }
 ```
 """
-from examples.shared.apps.items import app # The FastAPI app
+
+from examples.shared.apps.items import app  # The FastAPI app
 from examples.shared.setup import setup_logging
 
 from fastapi import Depends
@@ -34,10 +35,12 @@ setup_logging()
 # Scheme for the Authorization header
 token_auth_scheme = HTTPBearer()
 
+
 # Create a private endpoint
 @app.get("/private")
-async def private(token = Depends(token_auth_scheme)):
+async def private(token=Depends(token_auth_scheme)):
     return token.credentials
+
 
 # Create the MCP server with the token auth scheme
 mcp = FastApiMCP(
@@ -54,5 +57,5 @@ mcp.mount()
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
