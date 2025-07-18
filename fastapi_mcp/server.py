@@ -3,7 +3,7 @@ import httpx
 from typing import Dict, Optional, Any, List, Union, Callable, Awaitable, Iterable, Literal, Sequence
 from typing_extensions import Annotated, Doc
 
-from fastapi import FastAPI, Request, APIRouter, params
+from fastapi import FastAPI, Request, APIRouter, params, Response
 from fastapi.openapi.utils import get_openapi
 from mcp.server.lowlevel.server import Server
 import mcp.types as types
@@ -16,6 +16,11 @@ import logging
 
 
 logger = logging.getLogger(__name__)
+
+
+class VoidResponse(Response):
+    async def __call__(self, scope, receive, send) -> None:
+        pass
 
 
 class LowlevelMCPServer(Server):
@@ -214,6 +219,7 @@ class FastApiMCP:
                     self.server.create_initialization_options(notification_options=None, experimental_capabilities={}),
                     raise_exceptions=False,
                 )
+            return VoidResponse()
 
     def _register_mcp_messages_endpoint_sse(
         self,
