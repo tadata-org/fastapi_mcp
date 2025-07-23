@@ -347,7 +347,7 @@ class FastApiMCP:
 
         assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
 
-        http_transport = FastApiStreamableHttpTransport()
+        http_transport = FastApiStreamableHttpTransport(mcp_server=self.server)
         dependencies = self._auth_config.dependencies if self._auth_config else None
 
         self._register_mcp_endpoints_http(router, http_transport, mount_path, dependencies)
