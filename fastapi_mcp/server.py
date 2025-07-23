@@ -1,6 +1,6 @@
 import json
 import httpx
-from typing import Dict, Optional, Any, List, Union, Callable, Awaitable, Iterable, Literal, Sequence
+from typing import Dict, Optional, Any, List, Union, Literal, Sequence
 from typing_extensions import Annotated, Doc
 
 from fastapi import FastAPI, Request, APIRouter, params
@@ -17,45 +17,6 @@ import logging
 
 
 logger = logging.getLogger(__name__)
-
-
-class LowlevelMCPServer(Server):
-    def call_tool(self):
-        """
-        A near-direct copy of `mcp.server.lowlevel.server.Server.call_tool()`, except that it looks for
-        the original HTTP request info in the MCP message, and passes it to the tool call handler.
-        """
-
-        def decorator(
-            func: Callable[
-                ...,
-                Awaitable[Iterable[types.TextContent | types.ImageContent | types.EmbeddedResource]],
-            ],
-        ):
-            logger.debug("Registering handler for CallToolRequest")
-
-            async def handler(req: types.CallToolRequest):
-                try:
-                    # HACK: Pull the original HTTP request info from the MCP message. It was injected in
-                    # `FastApiSseTransport.handle_fastapi_post_message()`
-                    if hasattr(req.params, "_http_request_info") and req.params._http_request_info is not None:
-                        http_request_info = HTTPRequestInfo.model_validate(req.params._http_request_info)
-                        results = await func(req.params.name, (req.params.arguments or {}), http_request_info)
-                    else:
-                        results = await func(req.params.name, (req.params.arguments or {}))
-                    return types.ServerResult(types.CallToolResult(content=list(results), isError=False))
-                except Exception as e:
-                    return types.ServerResult(
-                        types.CallToolResult(
-                            content=[types.TextContent(type="text", text=str(e))],
-                            isError=True,
-                        )
-                    )
-
-            self.request_handlers[types.CallToolRequest] = handler
-            return func
-
-        return decorator
 
 
 class FastApiMCP:
@@ -115,14 +76,14 @@ class FastApiMCP:
             Doc("Configuration for MCP authentication"),
         ] = None,
         headers: Annotated[
-            Optional[List[str]],
+            List[str],
             Doc(
                 """
                 List of HTTP header names to forward from the incoming MCP request into each tool invocation.
                 Only headers in this allowlist will be forwarded. Defaults to ['authorization'].
                 """
             ),
-        ] = None,
+        ] = ["authorization"],
     ):
         # Validate operation and tag filtering options
         if include_operations is not None and exclude_operations is not None:
@@ -157,7 +118,7 @@ class FastApiMCP:
             timeout=10.0,
         )
 
-        self._forward_headers = {h.lower() for h in (headers or ["Authorization"])}
+        self._forward_headers = {h.lower() for h in headers}
 
         self.setup_server()
 
@@ -179,7 +140,7 @@ class FastApiMCP:
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
 
-        mcp_server: LowlevelMCPServer = LowlevelMCPServer(self.name, self.description)
+        mcp_server: Server = Server(self.name, self.description)
 
         @mcp_server.list_tools()
         async def handle_list_tools() -> List[types.Tool]:
@@ -187,8 +148,32 @@ class FastApiMCP:
 
         @mcp_server.call_tool()
         async def handle_call_tool(
-            name: str, arguments: Dict[str, Any], http_request_info: Optional[HTTPRequestInfo] = None
+            name: str, arguments: Dict[str, Any]
         ) -> List[Union[types.TextContent, types.ImageContent, types.EmbeddedResource]]:
+            # Extract HTTP request info from MCP context
+            http_request_info = None
+            try:
+                # Access the MCP server's request context to get the original HTTP Request
+                request_context = mcp_server.request_context
+
+                if request_context and hasattr(request_context, "request"):
+                    http_request = request_context.request
+
+                    if http_request and hasattr(http_request, "method"):
+                        http_request_info = HTTPRequestInfo(
+                            method=http_request.method,
+                            path=http_request.url.path,
+                            headers=dict(http_request.headers),
+                            cookies=http_request.cookies,
+                            query_params=dict(http_request.query_params),
+                            body=None,
+                        )
+                        logger.debug(
+                            f"Extracted HTTP request info from context: {http_request_info.method} {http_request_info.path}"
+                        )
+            except (LookupError, AttributeError) as e:
+                logger.error(f"Could not extract HTTP request info from context: {e}")
+
             return await self._execute_api_tool(
                 client=self._http_client,
                 tool_name=name,
