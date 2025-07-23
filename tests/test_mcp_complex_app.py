@@ -214,8 +214,5 @@ async def test_error_handling_missing_parameter(lowlevel_server_complex_app: Ser
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
-        assert (
-            "422" in text_content.text
-            or "parameter" in text_content.text.lower()
-            or "field" in text_content.text.lower()
-        )
+        assert "input validation error" in text_content.text.lower(), "Expected an input validation error"
+        assert "required" in text_content.text.lower(), "Expected a missing required parameter error"
