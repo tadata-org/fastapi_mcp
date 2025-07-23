@@ -29,7 +29,7 @@ dependencies = [
     "fastapi>=0.100.0",
     "typer>=0.9.0",
     "rich>=13.0.0",
-    "mcp>=1.8.1",
+    "mcp>=1.12.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.5.2",
     "uvicorn>=0.20.0",
@@ -49,6 +49,7 @@ dev = [
     "pre-commit>=4.2.0",
     "pyjwt>=2.10.1",
     "cryptography>=44.0.2",
+    "types-jsonschema>=4.25.0.20250720",
 ]
 
 [project.urls]
