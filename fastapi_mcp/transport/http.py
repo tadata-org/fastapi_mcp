@@ -74,7 +74,7 @@ class FastApiStreamableHttpTransport(StreamableHTTPServerTransport):
         response_headers = []
         response_body = b""
 
-        async def capture_send(message):
+        async def send_callback(message):
             nonlocal response_started, response_status, response_headers, response_body
 
             if message["type"] == "http.response.start":
@@ -86,7 +86,7 @@ class FastApiStreamableHttpTransport(StreamableHTTPServerTransport):
 
         try:
             # Delegate to the SDK's handle_request method with ASGI interface
-            await self.handle_request(request.scope, request.receive, capture_send)
+            await self.handle_request(request.scope, request.receive, send_callback)
 
             # Convert the captured ASGI response to a FastAPI Response
             headers_dict = {name.decode(): value.decode() for name, value in response_headers}
@@ -97,6 +97,6 @@ class FastApiStreamableHttpTransport(StreamableHTTPServerTransport):
                 headers=headers_dict,
             )
 
-        except Exception as e:
-            logger.exception(f"Error in StreamableHTTPServerTransport: {e}")
+        except Exception:
+            logger.exception("Error in StreamableHTTPServerTransport")
             raise HTTPException(status_code=500, detail="Internal server error")
