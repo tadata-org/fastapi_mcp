@@ -50,10 +50,11 @@ You can control which FastAPI endpoints are exposed as MCP tools using Open API 
 - Only include operations with specific tags
 - Exclude operations with specific tags
 - Combine operation IDs and tags
+- Filter operation IDs that exceed a maximum allowed length
 
 ### Code samples
 
-The relevant arguments for these configurations are `include_operations`, `exclude_operations`, `include_tags`, `exclude_tags` and can be used as follows:
+The relevant arguments for these configurations are `include_operations`, `exclude_operations`, `include_tags`, `exclude_tags`, `max_tool_name_length` and can be used as follows:
 
 <CodeGroup>
     ```python Include Operations {8}
@@ -121,6 +122,19 @@ The relevant arguments for these configurations are `include_operations`, `exclu
     )
     mcp.mount_http()
     ```
+
+    ```python Max Length {8}
+    from fastapi import FastAPI
+    from fastapi_mcp import FastApiMCP
+
+    app = FastAPI()
+
+    mcp = FastApiMCP(
+        app,
+        max_tool_name_length=25,
+    )
+    mcp.mount()
+    ```
 </CodeGroup>
 
 ### Notes on filtering
@@ -129,3 +143,4 @@ The relevant arguments for these configurations are `include_operations`, `exclu
 - You cannot use both `include_tags` and `exclude_tags` at the same time
 - You can combine operation filtering with tag filtering (e.g., use `include_operations` with `include_tags`)
 - When combining filters, a greedy approach will be taken. Endpoints matching either criteria will be included
+- Max length filtering can combined with any other filter
