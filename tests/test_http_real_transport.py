@@ -190,13 +190,21 @@ async def test_http_list_tools(http_client: httpx.AsyncClient, server: str) -> N
     )
     assert init_response.status_code == 200
 
+    # Extract session ID from the initialize response
+    session_id = init_response.headers.get("mcp-session-id")
+    assert session_id is not None, "Server should return a session ID"
+
     initialized_response = await http_client.post(
         mcp_path,
         json={
             "jsonrpc": "2.0",
             "method": "notifications/initialized",
         },
-        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "mcp-session-id": session_id,
+        },
     )
     assert initialized_response.status_code == 202
 
@@ -207,7 +215,11 @@ async def test_http_list_tools(http_client: httpx.AsyncClient, server: str) -> N
             "method": "tools/list",
             "id": 2,
         },
-        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "mcp-session-id": session_id,
+        },
     )
 
     assert response.status_code == 200
@@ -245,13 +257,21 @@ async def test_http_call_tool(http_client: httpx.AsyncClient, server: str) -> No
     )
     assert init_response.status_code == 200
 
+    # Extract session ID from the initialize response
+    session_id = init_response.headers.get("mcp-session-id")
+    assert session_id is not None, "Server should return a session ID"
+
     initialized_response = await http_client.post(
         mcp_path,
         json={
             "jsonrpc": "2.0",
             "method": "notifications/initialized",
         },
-        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "mcp-session-id": session_id,
+        },
     )
     assert initialized_response.status_code == 202
 
@@ -266,7 +286,11 @@ async def test_http_call_tool(http_client: httpx.AsyncClient, server: str) -> No
                 "arguments": {"item_id": 1},
             },
         },
-        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "mcp-session-id": session_id,
+        },
     )
 
     assert response.status_code == 200
@@ -305,13 +329,21 @@ async def test_http_ping(http_client: httpx.AsyncClient, server: str) -> None:
     )
     assert init_response.status_code == 200
 
+    # Extract session ID from the initialize response
+    session_id = init_response.headers.get("mcp-session-id")
+    assert session_id is not None, "Server should return a session ID"
+
     initialized_response = await http_client.post(
         mcp_path,
         json={
             "jsonrpc": "2.0",
             "method": "notifications/initialized",
         },
-        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "mcp-session-id": session_id,
+        },
     )
     assert initialized_response.status_code == 202
 
@@ -322,7 +354,11 @@ async def test_http_ping(http_client: httpx.AsyncClient, server: str) -> None:
             "method": "ping",
             "id": 4,
         },
-        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "mcp-session-id": session_id,
+        },
     )
 
     assert response.status_code == 200
@@ -354,6 +390,27 @@ async def test_http_invalid_method(http_client: httpx.AsyncClient, server: str) 
     """Test error handling for invalid methods."""
     mcp_path = "/mcp"
 
+    # First initialize to get a session ID
+    init_response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+                "protocolVersion": types.LATEST_PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "1.0.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+    assert init_response.status_code == 200
+
+    # Extract session ID from the initialize response
+    session_id = init_response.headers.get("mcp-session-id")
+    assert session_id is not None, "Server should return a session ID"
+
     response = await http_client.post(
         mcp_path,
         json={
@@ -361,7 +418,11 @@ async def test_http_invalid_method(http_client: httpx.AsyncClient, server: str) 
             "method": "invalid/method",
             "id": 5,
         },
-        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "mcp-session-id": session_id,
+        },
     )
 
     assert response.status_code == 200
@@ -377,6 +438,27 @@ async def test_http_notification_handling(http_client: httpx.AsyncClient, server
     """Test that notifications return 202 Accepted without response body."""
     mcp_path = "/mcp"
 
+    # First initialize to get a session ID
+    init_response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+                "protocolVersion": types.LATEST_PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "1.0.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+    assert init_response.status_code == 200
+
+    # Extract session ID from the initialize response
+    session_id = init_response.headers.get("mcp-session-id")
+    assert session_id is not None, "Server should return a session ID"
+
     response = await http_client.post(
         mcp_path,
         json={
@@ -384,7 +466,11 @@ async def test_http_notification_handling(http_client: httpx.AsyncClient, server
             "method": "notifications/cancelled",
             "params": {"requestId": "test-123"},
         },
-        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "mcp-session-id": session_id,
+        },
     )
 
     assert response.status_code == 202
