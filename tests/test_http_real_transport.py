@@ -167,3 +167,226 @@ async def test_http_initialize_request(http_client: httpx.AsyncClient, server: s
     assert result["id"] == 1
     assert "result" in result
     assert result["result"]["serverInfo"]["name"] == SERVER_NAME
+
+
+@pytest.mark.anyio
+async def test_http_list_tools(http_client: httpx.AsyncClient, server: str) -> None:
+    """Test tool listing via HTTP POST with JSON response."""
+    mcp_path = "/mcp"
+
+    init_response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+                "protocolVersion": types.LATEST_PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "1.0.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+    assert init_response.status_code == 200
+
+    initialized_response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+    assert initialized_response.status_code == 202
+
+    response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/list",
+            "id": 2,
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["jsonrpc"] == "2.0"
+    assert result["id"] == 2
+    assert "result" in result
+    assert "tools" in result["result"]
+    assert len(result["result"]["tools"]) > 0
+
+    # Verify we have the expected tools from the simple FastAPI app
+    tool_names = [tool["name"] for tool in result["result"]["tools"]]
+    assert "get_item" in tool_names
+    assert "list_items" in tool_names
+
+
+@pytest.mark.anyio
+async def test_http_call_tool(http_client: httpx.AsyncClient, server: str) -> None:
+    """Test tool calling via HTTP POST with JSON response."""
+    mcp_path = "/mcp"
+
+    init_response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+                "protocolVersion": types.LATEST_PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "1.0.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+    assert init_response.status_code == 200
+
+    initialized_response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+    assert initialized_response.status_code == 202
+
+    response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "id": 3,
+            "params": {
+                "name": "get_item",
+                "arguments": {"item_id": 1},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["jsonrpc"] == "2.0"
+    assert result["id"] == 3
+    assert "result" in result
+    assert result["result"]["isError"] is False
+    assert "content" in result["result"]
+    assert len(result["result"]["content"]) > 0
+
+    # Verify the response contains expected item data
+    content = result["result"]["content"][0]
+    assert content["type"] == "text"
+    assert "Item 1" in content["text"]  # Should contain the item name
+
+
+@pytest.mark.anyio
+async def test_http_ping(http_client: httpx.AsyncClient, server: str) -> None:
+    """Test ping functionality via HTTP POST."""
+    mcp_path = "/mcp"
+
+    init_response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+                "protocolVersion": types.LATEST_PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "1.0.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+    assert init_response.status_code == 200
+
+    initialized_response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+    assert initialized_response.status_code == 202
+
+    response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "ping",
+            "id": 4,
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["jsonrpc"] == "2.0"
+    assert result["id"] == 4
+    assert "result" in result
+
+
+@pytest.mark.anyio
+async def test_http_error_handling(http_client: httpx.AsyncClient, server: str) -> None:
+    """Test error handling for invalid requests."""
+    mcp_path = "/mcp"
+
+    response = await http_client.post(
+        mcp_path,
+        content="invalid json",
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 400
+    result = response.json()
+    assert "error" in result
+    assert result["error"]["code"] == -32700  # Parse error
+
+
+@pytest.mark.anyio
+async def test_http_invalid_method(http_client: httpx.AsyncClient, server: str) -> None:
+    """Test error handling for invalid methods."""
+    mcp_path = "/mcp"
+
+    response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "invalid/method",
+            "id": 5,
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["jsonrpc"] == "2.0"
+    assert result["id"] == 5
+    assert "error" in result
+    assert result["error"]["code"] == -32602  # Invalid request parameters
+
+
+@pytest.mark.anyio
+async def test_http_notification_handling(http_client: httpx.AsyncClient, server: str) -> None:
+    """Test that notifications return 202 Accepted without response body."""
+    mcp_path = "/mcp"
+
+    response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "notifications/cancelled",
+            "params": {"requestId": "test-123"},
+        },
+        headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 202
+    # Notifications should return empty body
+    assert response.content == b"" or response.text == "null"
