@@ -1,6 +1,6 @@
 import json
 import httpx
-from typing import Dict, Optional, Any, List, Union, Callable, Awaitable, Iterable, Literal, Sequence
+from typing import Dict, Optional, Any, List, Union, Literal, Sequence
 from typing_extensions import Annotated, Doc
 
 from fastapi import FastAPI, Request, APIRouter, params
@@ -10,51 +10,13 @@ import mcp.types as types
 
 from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
 from fastapi_mcp.transport.sse import FastApiSseTransport
+from fastapi_mcp.transport.http import FastApiHttpSessionManager
 from fastapi_mcp.types import HTTPRequestInfo, AuthConfig
 
 import logging
 
 
 logger = logging.getLogger(__name__)
-
-
-class LowlevelMCPServer(Server):
-    def call_tool(self):
-        """
-        A near-direct copy of `mcp.server.lowlevel.server.Server.call_tool()`, except that it looks for
-        the original HTTP request info in the MCP message, and passes it to the tool call handler.
-        """
-
-        def decorator(
-            func: Callable[
-                ...,
-                Awaitable[Iterable[types.TextContent | types.ImageContent | types.EmbeddedResource]],
-            ],
-        ):
-            logger.debug("Registering handler for CallToolRequest")
-
-            async def handler(req: types.CallToolRequest):
-                try:
-                    # Pull the original HTTP request info from the MCP message. It was injected in
-                    # `FastApiSseTransport.handle_fastapi_post_message()`
-                    if hasattr(req.params, "_http_request_info") and req.params._http_request_info is not None:
-                        http_request_info = HTTPRequestInfo.model_validate(req.params._http_request_info)
-                        results = await func(req.params.name, (req.params.arguments or {}), http_request_info)
-                    else:
-                        results = await func(req.params.name, (req.params.arguments or {}))
-                    return types.ServerResult(types.CallToolResult(content=list(results), isError=False))
-                except Exception as e:
-                    return types.ServerResult(
-                        types.CallToolResult(
-                            content=[types.TextContent(type="text", text=str(e))],
-                            isError=True,
-                        )
-                    )
-
-            self.request_handlers[types.CallToolRequest] = handler
-            return func
-
-        return decorator
 
 
 class FastApiMCP:
@@ -114,14 +76,14 @@ class FastApiMCP:
             Doc("Configuration for MCP authentication"),
         ] = None,
         headers: Annotated[
-            Optional[List[str]],
+            List[str],
             Doc(
                 """
                 List of HTTP header names to forward from the incoming MCP request into each tool invocation.
                 Only headers in this allowlist will be forwarded. Defaults to ['authorization'].
                 """
             ),
-        ] = None,
+        ] = ["authorization"],
     ):
         # Validate operation and tag filtering options
         if include_operations is not None and exclude_operations is not None:
@@ -156,7 +118,8 @@ class FastApiMCP:
             timeout=10.0,
         )
 
-        self._forward_headers = {h.lower() for h in (headers or ["Authorization"])}
+        self._forward_headers = {h.lower() for h in headers}
+        self._http_transport: FastApiHttpSessionManager | None = None  # Store reference to HTTP transport for cleanup
 
         self.setup_server()
 
@@ -178,7 +141,7 @@ class FastApiMCP:
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
 
-        mcp_server: LowlevelMCPServer = LowlevelMCPServer(self.name, self.description)
+        mcp_server: Server = Server(self.name, self.description)
 
         @mcp_server.list_tools()
         async def handle_list_tools() -> List[types.Tool]:
@@ -186,8 +149,32 @@ class FastApiMCP:
 
         @mcp_server.call_tool()
         async def handle_call_tool(
-            name: str, arguments: Dict[str, Any], http_request_info: Optional[HTTPRequestInfo] = None
+            name: str, arguments: Dict[str, Any]
         ) -> List[Union[types.TextContent, types.ImageContent, types.EmbeddedResource]]:
+            # Extract HTTP request info from MCP context
+            http_request_info = None
+            try:
+                # Access the MCP server's request context to get the original HTTP Request
+                request_context = mcp_server.request_context
+
+                if request_context and hasattr(request_context, "request"):
+                    http_request = request_context.request
+
+                    if http_request and hasattr(http_request, "method"):
+                        http_request_info = HTTPRequestInfo(
+                            method=http_request.method,
+                            path=http_request.url.path,
+                            headers=dict(http_request.headers),
+                            cookies=http_request.cookies,
+                            query_params=dict(http_request.query_params),
+                            body=None,
+                        )
+                        logger.debug(
+                            f"Extracted HTTP request info from context: {http_request_info.method} {http_request_info.path}"
+                        )
+            except (LookupError, AttributeError) as e:
+                logger.error(f"Could not extract HTTP request info from context: {e}")
+
             return await self._execute_api_tool(
                 client=self._http_client,
                 tool_name=name,
@@ -240,6 +227,32 @@ class FastApiMCP:
     ):
         self._register_mcp_connection_endpoint_sse(router, transport, mount_path, dependencies)
         self._register_mcp_messages_endpoint_sse(router, transport, mount_path, dependencies)
+
+    def _register_mcp_http_endpoint(
+        self,
+        router: FastAPI | APIRouter,
+        transport: FastApiHttpSessionManager,
+        mount_path: str,
+        dependencies: Optional[Sequence[params.Depends]],
+    ):
+        @router.api_route(
+            mount_path,
+            methods=["GET", "POST", "DELETE"],
+            include_in_schema=False,
+            operation_id="mcp_http",
+            dependencies=dependencies,
+        )
+        async def handle_mcp_streamable_http(request: Request):
+            return await transport.handle_fastapi_request(request)
+
+    def _register_mcp_endpoints_http(
+        self,
+        router: FastAPI | APIRouter,
+        transport: FastApiHttpSessionManager,
+        mount_path: str,
+        dependencies: Optional[Sequence[params.Depends]],
+    ):
+        self._register_mcp_http_endpoint(router, transport, mount_path, dependencies)
 
     def _setup_auth_2025_03_26(self):
         from fastapi_mcp.auth.proxy import (
@@ -296,6 +309,120 @@ class FastApiMCP:
         else:
             logger.info("No auth config provided, skipping auth setup")
 
+    def mount_http(
+        self,
+        router: Annotated[
+            Optional[FastAPI | APIRouter],
+            Doc(
+                """
+                The FastAPI app or APIRouter to mount the MCP server to. If not provided, the MCP
+                server will be mounted to the FastAPI app.
+                """
+            ),
+        ] = None,
+        mount_path: Annotated[
+            str,
+            Doc(
+                """
+                Path where the MCP server will be mounted.
+                Mount path is appended to the root path of FastAPI router, or to the prefix of APIRouter.
+                Defaults to '/mcp'.
+                """
+            ),
+        ] = "/mcp",
+    ) -> None:
+        """
+        Mount the MCP server with HTTP transport to **any** FastAPI app or APIRouter.
+
+        There is no requirement that the FastAPI app or APIRouter is the same as the one that the MCP
+        server was created from.
+        """
+        # Normalize mount path
+        if not mount_path.startswith("/"):
+            mount_path = f"/{mount_path}"
+        if mount_path.endswith("/"):
+            mount_path = mount_path[:-1]
+
+        if not router:
+            router = self.fastapi
+
+        assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
+
+        http_transport = FastApiHttpSessionManager(mcp_server=self.server)
+        dependencies = self._auth_config.dependencies if self._auth_config else None
+
+        self._register_mcp_endpoints_http(router, http_transport, mount_path, dependencies)
+        self._setup_auth()
+        self._http_transport = http_transport  # Store reference
+
+        # HACK: If we got a router and not a FastAPI instance, we need to re-include the router so that
+        # FastAPI will pick up the new routes we added. The problem with this approach is that we assume
+        # that the router is a sub-router of self.fastapi, which may not always be the case.
+        #
+        # TODO: Find a better way to do this.
+        if isinstance(router, APIRouter):
+            self.fastapi.include_router(router)
+
+        logger.info(f"MCP HTTP server listening at {mount_path}")
+
+    def mount_sse(
+        self,
+        router: Annotated[
+            Optional[FastAPI | APIRouter],
+            Doc(
+                """
+                The FastAPI app or APIRouter to mount the MCP server to. If not provided, the MCP
+                server will be mounted to the FastAPI app.
+                """
+            ),
+        ] = None,
+        mount_path: Annotated[
+            str,
+            Doc(
+                """
+                Path where the MCP server will be mounted.
+                Mount path is appended to the root path of FastAPI router, or to the prefix of APIRouter.
+                Defaults to '/sse'.
+                """
+            ),
+        ] = "/sse",
+    ) -> None:
+        """
+        Mount the MCP server with SSE transport to **any** FastAPI app or APIRouter.
+
+        There is no requirement that the FastAPI app or APIRouter is the same as the one that the MCP
+        server was created from.
+        """
+        # Normalize mount path
+        if not mount_path.startswith("/"):
+            mount_path = f"/{mount_path}"
+        if mount_path.endswith("/"):
+            mount_path = mount_path[:-1]
+
+        if not router:
+            router = self.fastapi
+
+        # Build the base path correctly for the SSE transport
+        assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
+        base_path = mount_path if isinstance(router, FastAPI) else router.prefix + mount_path
+        messages_path = f"{base_path}/messages/"
+
+        sse_transport = FastApiSseTransport(messages_path)
+        dependencies = self._auth_config.dependencies if self._auth_config else None
+
+        self._register_mcp_endpoints_sse(router, sse_transport, mount_path, dependencies)
+        self._setup_auth()
+
+        # HACK: If we got a router and not a FastAPI instance, we need to re-include the router so that
+        # FastAPI will pick up the new routes we added. The problem with this approach is that we assume
+        # that the router is a sub-router of self.fastapi, which may not always be the case.
+        #
+        # TODO: Find a better way to do this.
+        if isinstance(router, APIRouter):
+            self.fastapi.include_router(router)
+
+        logger.info(f"MCP SSE server listening at {mount_path}")
+
     def mount(
         self,
         router: Annotated[
@@ -322,50 +449,37 @@ class FastApiMCP:
             Doc(
                 """
                 The transport type for the MCP server. Currently only 'sse' is supported.
+                This parameter is deprecated.
                 """
             ),
         ] = "sse",
     ) -> None:
         """
-        Mount the MCP server to **any** FastAPI app or APIRouter.
+        [DEPRECATED] Mount the MCP server to **any** FastAPI app or APIRouter.
+
+        This method is deprecated and will be removed in a future version.
+        Use mount_http() for HTTP transport (recommended) or mount_sse() for SSE transport instead.
+
+        For backwards compatibility, this method defaults to SSE transport.
 
         There is no requirement that the FastAPI app or APIRouter is the same as the one that the MCP
         server was created from.
         """
-        # Normalize mount path
-        if not mount_path.startswith("/"):
-            mount_path = f"/{mount_path}"
-        if mount_path.endswith("/"):
-            mount_path = mount_path[:-1]
+        import warnings
 
-        if not router:
-            router = self.fastapi
-
-        # Build the base path correctly for the SSE transport
-        assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
-        base_path = mount_path if isinstance(router, FastAPI) else router.prefix + mount_path
-        messages_path = f"{base_path}/messages/"
-
-        sse_transport = FastApiSseTransport(messages_path)
-
-        dependencies = self._auth_config.dependencies if self._auth_config else None
+        warnings.warn(
+            "mount() is deprecated and will be removed in a future version. "
+            "Use mount_http() for HTTP transport (recommended) or mount_sse() for SSE transport instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
         if transport == "sse":
-            self._register_mcp_endpoints_sse(router, sse_transport, mount_path, dependencies)
+            self.mount_sse(router, mount_path)
         else:  # pragma: no cover
-            raise ValueError(f"Invalid transport: {transport}")  # pragma: no cover
-
-        self._setup_auth()
-
-        # HACK: If we got a router and not a FastAPI instance, we need to re-include the router so that
-        # FastAPI will pick up the new routes we added. The problem with this approach is that we assume
-        # that the router is a sub-router of self.fastapi, which may not always be the case.
-        #
-        # TODO: Find a better way to do this.
-        if isinstance(router, APIRouter):
-            self.fastapi.include_router(router)
-
-        logger.info(f"MCP server listening at {mount_path}")
+            raise ValueError(  # pragma: no cover
+                f"Unsupported transport: {transport}. Use mount_sse() or mount_http() instead."
+            )
 
     async def _execute_api_tool(
         self,

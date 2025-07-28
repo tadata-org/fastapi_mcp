@@ -64,7 +64,7 @@ def run_server(server_port: int, fastapi_app: FastAPI) -> None:
         name=SERVER_NAME,
         description="Test description",
     )
-    mcp.mount()
+    mcp.mount_sse()
 
     # Start the server
     server = uvicorn.Server(config=uvicorn.Config(app=fastapi_app, host=HOST, port=server_port, log_level="error"))
@@ -141,12 +141,18 @@ async def http_client(server: str) -> AsyncGenerator[httpx.AsyncClient, None]:
 
 
 @pytest.mark.anyio
-async def test_raw_sse_connection(http_client: httpx.AsyncClient) -> None:
+async def test_raw_sse_connection(http_client: httpx.AsyncClient, server: str) -> None:
     """Test the SSE connection establishment simply with an HTTP client."""
+    from urllib.parse import urlparse
+
+    parsed_url = urlparse(server)
+    root_path = parsed_url.path
+    messages_path = f"{root_path}/sse/messages/" if root_path else "/sse/messages/"
+
     async with anyio.create_task_group():
 
         async def connection_test() -> None:
-            async with http_client.stream("GET", "/mcp") as response:
+            async with http_client.stream("GET", "/sse") as response:
                 assert response.status_code == 200
                 assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
 
@@ -155,7 +161,7 @@ async def test_raw_sse_connection(http_client: httpx.AsyncClient) -> None:
                     if line_number == 0:
                         assert line == "event: endpoint"
                     elif line_number == 1:
-                        assert line.startswith("data: /mcp/messages/?session_id=")
+                        assert line.startswith(f"data: {messages_path}?session_id=")
                     else:
                         return
                     line_number += 1
@@ -167,7 +173,7 @@ async def test_raw_sse_connection(http_client: httpx.AsyncClient) -> None:
 
 @pytest.mark.anyio
 async def test_sse_basic_connection(server: str) -> None:
-    async with sse_client(server + "/mcp") as streams:
+    async with sse_client(server + "/sse") as streams:
         async with ClientSession(*streams) as session:
             # Test initialization
             result = await session.initialize()
@@ -181,7 +187,7 @@ async def test_sse_basic_connection(server: str) -> None:
 
 @pytest.mark.anyio
 async def test_sse_tool_call(server: str) -> None:
-    async with sse_client(server + "/mcp") as streams:
+    async with sse_client(server + "/sse") as streams:
         async with ClientSession(*streams) as session:
             await session.initialize()
 

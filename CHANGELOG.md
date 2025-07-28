@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+🚀 **FastAPI-MCP now supports Streamable HTTP transport.**
+
+HTTP transport is now the recommended approach, following the specification that positions HTTP as the standard while maintaining SSE for backwards compatibility.
+
+### ⚠️ Breaking Changes
+- **`mount()` method is deprecated** and will be removed in a future version. Use `mount_http()` for HTTP transport (recommended) or `mount_sse()` for SSE transport.
+
+### Added
+- 🎉 **Streamable HTTP Transport Support** - New `mount_http()` method implementing the MCP Streamable HTTP specification
+- 🎉 **Stateful Session Management** - For both HTTP and SSE transports
+
 ## [0.3.7]
 
 ### Fixed

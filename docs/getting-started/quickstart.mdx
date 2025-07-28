@@ -22,14 +22,14 @@ app = FastAPI()
 mcp = FastApiMCP(app)
 
 # Mount the MCP server directly to your app
-mcp.mount()
+mcp.mount_http()
 ```
 
 For more usage examples, see [Examples](https://github.com/tadata-org/fastapi_mcp/tree/main/examples) section in the project.
 
 ## Running the server
 
-By running your FastAPI, your MCP will run at `https://app.base.url/mcp`. 
+By running your FastAPI, your MCP will run at `https://app.base.url/mcp`.
 
 For example, by using uvicorn, add to your code:
 ```python {9-11}
@@ -39,7 +39,7 @@ from fastapi_mcp import FastApiMCP
 app = FastAPI()
 
 mcp = FastApiMCP(app)
-mcp.mount()
+mcp.mount_http()
 
 if __name__ == "__main__":
     import uvicorn
@@ -49,7 +49,7 @@ and run the server using `python fastapi_mcp_server.py`, which will serve you th
 
 ## Connecting a client to the MCP server
 
-Once your FastAPI app with MCP integration is running, you would want to connect it to an MCP client. 
+Once your FastAPI app with MCP integration is running, you would want to connect it to an MCP client.
 
 ### Connecting to the MCP Server using SSE
 
