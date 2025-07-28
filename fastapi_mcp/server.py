@@ -119,6 +119,7 @@ class FastApiMCP:
         )
 
         self._forward_headers = {h.lower() for h in headers}
+        self._http_transport = None  # Store reference to HTTP transport for cleanup
 
         self.setup_server()
 
@@ -352,6 +353,7 @@ class FastApiMCP:
 
         self._register_mcp_endpoints_http(router, http_transport, mount_path, dependencies)
         self._setup_auth()
+        self._http_transport = http_transport # Store reference
 
         # HACK: If we got a router and not a FastAPI instance, we need to re-include the router so that
         # FastAPI will pick up the new routes we added. The problem with this approach is that we assume
