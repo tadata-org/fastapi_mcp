@@ -1,5 +1,5 @@
 import logging
-
+import anyio
 from fastapi import Request, Response, HTTPException
 from mcp.server.lowlevel.server import Server
 from mcp.server.streamable_http import StreamableHTTPServerTransport
@@ -8,7 +8,14 @@ from mcp.server.transport_security import TransportSecuritySettings
 logger = logging.getLogger(__name__)
 
 
-class FastApiStreamableHttpTransport(StreamableHTTPServerTransport):
+class FastApiStreamableHttpTransport:
+    """
+    FastAPI wrapper for StreamableHTTPServerTransport using stateless mode.
+
+    This creates a fresh transport instance for each request to avoid conflicts
+    and follows the SDK's recommended stateless pattern.
+    """
+
     def __init__(
         self,
         mcp_session_id: str | None = None,
@@ -17,27 +24,18 @@ class FastApiStreamableHttpTransport(StreamableHTTPServerTransport):
         security_settings: TransportSecuritySettings | None = None,
         mcp_server: Server | None = None,
     ):
-        super().__init__(
-            mcp_session_id=mcp_session_id,
-            is_json_response_enabled=is_json_response_enabled,
-            event_store=event_store,
-            security_settings=security_settings,
-        )
-        logger.debug(f"FastApiStreamableHttpTransport initialized with session_id: {mcp_session_id}")
+        logger.debug("FastApiStreamableHttpTransport initialized for stateless mode")
         self._mcp_server = mcp_server
-        self._server_running = False
+        self._is_json_response_enabled = is_json_response_enabled
+        self._event_store = event_store
+        self._security_settings = security_settings
 
     async def handle_fastapi_request(self, request: Request, mcp_server: Server | None = None) -> Response:
         """
-        The approach here is different from FastApiSseTransport.
-        In FastApiSseTransport, we reimplement the SSE transport logic to have a more FastAPI-native transport.
-        It proved to be less bug-prone since it avoids deconstructing and reconstructing raw ASGI objects.
+        Handle FastAPI request using stateless mode - creates a fresh transport for each request.
 
-        But, we took a different approach here because StreamableHTTPServerTransport handles more complexity,
-        and multiple request methods (GET/POST/DELETE), so we want to leverage that logic and avoid reimplementing.
-
-        We still ensure it works natively with FastAPI by capturing the ASGI response from the SDK and converting
-        it to a FastAPI Response.
+        This follows the SDK's stateless pattern from StreamableHTTPSessionManager to avoid
+        409 Conflict errors that occur when multiple requests try to use the same transport instance.
         """
         logger.debug(f"Handling FastAPI request: {request.method} {request.url.path}")
 
@@ -46,57 +44,65 @@ class FastApiStreamableHttpTransport(StreamableHTTPServerTransport):
         if not server:
             raise HTTPException(status_code=500, detail="No MCP server available")
 
-        # Initialize the transport if not already done
-        if not self._server_running:
-            import anyio
+        # Create a fresh transport for this request (stateless mode)
+        http_transport = StreamableHTTPServerTransport(
+            mcp_session_id=None,  # No session tracking in stateless mode
+            is_json_response_enabled=self._is_json_response_enabled,
+            event_store=None,  # No event store in stateless mode
+            security_settings=self._security_settings,
+        )
 
-            async def start_server():
-                self._server_running = True
-                async with self.connect() as (reader, writer):
+        # Start server in a background task
+        async def run_stateless_server(*, task_status: anyio.abc.TaskStatus[None] = anyio.TASK_STATUS_IGNORED):
+            async with http_transport.connect() as streams:
+                read_stream, write_stream = streams
+                task_status.started()
+                try:
                     await server.run(
-                        reader,
-                        writer,
-                        server.create_initialization_options(notification_options=None, experimental_capabilities={}),
-                        raise_exceptions=False,
+                        read_stream,
+                        write_stream,
+                        server.create_initialization_options(),
+                        stateless=True,
                     )
+                except Exception:
+                    logger.exception("Stateless session crashed")
 
-            # Start the server in a background task
-            import asyncio
+        # Start the server task
+        async with anyio.create_task_group() as tg:
+            await tg.start(run_stateless_server)
 
-            asyncio.create_task(start_server())
+            # Capture the response from the SDK's handle_request method
+            response_started = False
+            response_status = 200
+            response_headers = []
+            response_body = b""
 
-            # Give the server a moment to initialize
-            await anyio.sleep(0.1)
+            async def send_callback(message):
+                nonlocal response_started, response_status, response_headers, response_body
 
-        # Capture the response from the SDK's handle_request method
-        response_started = False
-        response_status = 200
-        response_headers = []
-        response_body = b""
+                if message["type"] == "http.response.start":
+                    response_started = True
+                    response_status = message["status"]
+                    response_headers = message.get("headers", [])
+                elif message["type"] == "http.response.body":
+                    response_body += message.get("body", b"")
 
-        async def send_callback(message):
-            nonlocal response_started, response_status, response_headers, response_body
+            try:
+                # Delegate to the SDK's handle_request method with ASGI interface
+                await http_transport.handle_request(request.scope, request.receive, send_callback)
 
-            if message["type"] == "http.response.start":
-                response_started = True
-                response_status = message["status"]
-                response_headers = message.get("headers", [])
-            elif message["type"] == "http.response.body":
-                response_body += message.get("body", b"")
+                # Convert the captured ASGI response to a FastAPI Response
+                headers_dict = {name.decode(): value.decode() for name, value in response_headers}
 
-        try:
-            # Delegate to the SDK's handle_request method with ASGI interface
-            await self.handle_request(request.scope, request.receive, send_callback)
+                return Response(
+                    content=response_body,
+                    status_code=response_status,
+                    headers=headers_dict,
+                )
 
-            # Convert the captured ASGI response to a FastAPI Response
-            headers_dict = {name.decode(): value.decode() for name, value in response_headers}
-
-            return Response(
-                content=response_body,
-                status_code=response_status,
-                headers=headers_dict,
-            )
-
-        except Exception:
-            logger.exception("Error in StreamableHTTPServerTransport")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            except Exception:
+                logger.exception("Error in StreamableHTTPServerTransport")
+                raise HTTPException(status_code=500, detail="Internal server error")
+            finally:
+                # Terminate the transport after the request is handled (stateless mode)
+                await http_transport.terminate()
