@@ -192,7 +192,7 @@ class FastApiMCP:
         mount_path: str,
         dependencies: Optional[Sequence[params.Depends]],
     ):
-        @router.get(mount_path, include_in_schema=False, operation_id="mcp_connection", dependencies=dependencies)
+        @router.api_route(mount_path, include_in_schema=False, operation_id="mcp_connection", dependencies=dependencies, methods=["GET", "POST"])
         async def handle_mcp_connection(request: Request):
             async with transport.connect_sse(request.scope, request.receive, request._send) as (reader, writer):
                 await self.server.run(
