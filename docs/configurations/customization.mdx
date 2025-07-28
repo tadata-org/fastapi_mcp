@@ -18,7 +18,7 @@ mcp = FastApiMCP(
     name="My API MCP",
     description="Very cool MCP server",
 )
-mcp.mount()
+mcp.mount_http()
 ```
 
 ## Tool and schema descriptions
@@ -39,7 +39,7 @@ mcp = FastApiMCP(
     describe_full_response_schema=True
 )
 
-mcp.mount()
+mcp.mount_http()
 ```
 
 ## Customizing Exposed Endpoints
@@ -66,7 +66,7 @@ The relevant arguments for these configurations are `include_operations`, `exclu
         app,
         include_operations=["get_user", "create_user"]
     )
-    mcp.mount()
+    mcp.mount_http()
     ```
 
     ```python Exclude Operations {8}
@@ -79,7 +79,7 @@ The relevant arguments for these configurations are `include_operations`, `exclu
         app,
         exclude_operations=["delete_user"]
     )
-    mcp.mount()
+    mcp.mount_http()
     ```
 
     ```python Include Tags {8}
@@ -92,7 +92,7 @@ The relevant arguments for these configurations are `include_operations`, `exclu
         app,
         include_tags=["users", "public"]
     )
-    mcp.mount()
+    mcp.mount_http()
     ```
 
     ```python Exclude Tags {8}
@@ -105,7 +105,7 @@ The relevant arguments for these configurations are `include_operations`, `exclu
         app,
         exclude_tags=["admin", "internal"]
     )
-    mcp.mount()
+    mcp.mount_http()
     ```
 
     ```python Combined (include mode) {8-9}
@@ -119,7 +119,7 @@ The relevant arguments for these configurations are `include_operations`, `exclu
         include_operations=["user_login"],
         include_tags=["public"]
     )
-    mcp.mount()
+    mcp.mount_http()
     ```
 </CodeGroup>
 

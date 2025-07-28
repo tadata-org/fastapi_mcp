@@ -53,7 +53,6 @@ mcp = FastApiMCP(
 
 # Mount the MCP server
 mcp.mount_http()
-# mcp.mount_sse() # Or use SSE transport instead
 
 
 if __name__ == "__main__":

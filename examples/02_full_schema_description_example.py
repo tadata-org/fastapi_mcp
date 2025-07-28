@@ -1,8 +1,8 @@
-
 """
 This example shows how to describe the full response schema instead of just a response example.
 """
-from examples.shared.apps.items import app # The FastAPI app
+
+from examples.shared.apps.items import app  # The FastAPI app
 from examples.shared.setup import setup_logging
 
 from fastapi_mcp import FastApiMCP
@@ -18,9 +18,9 @@ mcp = FastApiMCP(
     describe_all_responses=True,  # Describe all the possible responses instead of just the success (2XX) response
 )
 
-mcp.mount()
+mcp.mount_http()
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -15,7 +15,7 @@ from fastapi_mcp import FastApiMCP
 app = FastAPI()
 
 mcp = FastApiMCP(app)
-mcp.mount()
+mcp.mount_http()
 ```
 That's it! Your auto-generated MCP server is now available at `https://app.base.url/mcp`
 
@@ -33,7 +33,7 @@ That's it! Your auto-generated MCP server is now available at `https://app.base.
 
 - [**Flexible deployment**](/advanced/deploy) - Mount your MCP server to the same app, or deploy separately
 
-- [**ASGI transport**](/advanced/transport) - Uses FastAPI's ASGI interface directly for efficient communication
+- [**ASGI interface**](/advanced/asgi) - Uses FastAPI's ASGI interface directly for efficient internal communication
 
 ## Hosted Solution
 
