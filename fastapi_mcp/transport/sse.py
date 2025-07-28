@@ -5,7 +5,7 @@ from typing import Union
 from anyio.streams.memory import MemoryObjectSendStream
 from fastapi import Request, Response, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
-from mcp.shared.message import SessionMessage
+from mcp.shared.message import SessionMessage, ServerMessageMetadata
 from pydantic import ValidationError
 from mcp.server.sse import SseServerTransport
 from mcp.types import JSONRPCMessage, JSONRPCError, ErrorData
@@ -72,9 +72,11 @@ class FastApiSseTransport(SseServerTransport):
             logger.error(f"Error processing request body: {e}")
             raise HTTPException(status_code=400, detail="Invalid request body")
 
-        # Create background task to send message
+        # Create background task to send message with proper request context metadata
         background_tasks = BackgroundTasks()
-        background_tasks.add_task(self._send_message_safely, writer, SessionMessage(message))
+        metadata = ServerMessageMetadata(request_context=request)
+        session_message = SessionMessage(message, metadata=metadata)
+        background_tasks.add_task(self._send_message_safely, writer, session_message)
         logger.debug("Accepting message, will send in background")
 
         # Return response with background task
