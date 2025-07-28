@@ -10,7 +10,7 @@ import mcp.types as types
 
 from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
 from fastapi_mcp.transport.sse import FastApiSseTransport
-from fastapi_mcp.transport.http import FastApiStreamableHttpTransport
+from fastapi_mcp.transport.http import FastApiHttpSessionManager
 from fastapi_mcp.types import HTTPRequestInfo, AuthConfig
 
 import logging
@@ -119,6 +119,7 @@ class FastApiMCP:
         )
 
         self._forward_headers = {h.lower() for h in headers}
+        self._http_transport: FastApiHttpSessionManager | None = None  # Store reference to HTTP transport for cleanup
 
         self.setup_server()
 
@@ -230,7 +231,7 @@ class FastApiMCP:
     def _register_mcp_http_endpoint(
         self,
         router: FastAPI | APIRouter,
-        transport: FastApiStreamableHttpTransport,
+        transport: FastApiHttpSessionManager,
         mount_path: str,
         dependencies: Optional[Sequence[params.Depends]],
     ):
@@ -247,7 +248,7 @@ class FastApiMCP:
     def _register_mcp_endpoints_http(
         self,
         router: FastAPI | APIRouter,
-        transport: FastApiStreamableHttpTransport,
+        transport: FastApiHttpSessionManager,
         mount_path: str,
         dependencies: Optional[Sequence[params.Depends]],
     ):
@@ -347,11 +348,12 @@ class FastApiMCP:
 
         assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
 
-        http_transport = FastApiStreamableHttpTransport(mcp_server=self.server)
+        http_transport = FastApiHttpSessionManager(mcp_server=self.server)
         dependencies = self._auth_config.dependencies if self._auth_config else None
 
         self._register_mcp_endpoints_http(router, http_transport, mount_path, dependencies)
         self._setup_auth()
+        self._http_transport = http_transport  # Store reference
 
         # HACK: If we got a router and not a FastAPI instance, we need to re-include the router so that
         # FastAPI will pick up the new routes we added. The problem with this approach is that we assume
