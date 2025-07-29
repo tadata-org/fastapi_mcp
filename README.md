@@ -1,3 +1,5 @@
+[![MseeP Badge](https://mseep.net/pr/tadata-org-fastapi-mcp-badge.jpg)](https://mseep.ai/app/tadata-org-fastapi-mcp)
+
 <p align="center"><a href="https://github.com/tadata-org/fastapi_mcp"><img src="https://github.com/user-attachments/assets/7e44e98b-a0ba-4aff-a68a-4ffee3a6189c" alt="fastapi-to-mcp" height=100/></a></p>
 
 <div align="center">
