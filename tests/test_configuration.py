@@ -581,3 +581,254 @@ def test_filtering_with_empty_tags_array():
     exclude_tags_mcp = FastApiMCP(app, exclude_tags=["items"])
     assert len(exclude_tags_mcp.tools) == 1
     assert {tool.name for tool in exclude_tags_mcp.tools} == {"empty_tags"}
+
+
+def test_ignore_deprecated_default_behavior(simple_fastapi_app: FastAPI):
+    """Test that deprecated operations are ignored by default in FastApiMCP."""
+
+    # Add deprecated operations to the simple app
+    @simple_fastapi_app.get(
+        "/deprecated/items/",
+        response_model=list,
+        tags=["deprecated"],
+        operation_id="list_deprecated_items",
+        deprecated=True,
+    )
+    async def list_deprecated_items():
+        """[DEPRECATED] List all items (deprecated version)."""
+        return []
+
+    @simple_fastapi_app.get(
+        "/deprecated/items/{item_id}",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="get_deprecated_item",
+        deprecated=True,
+    )
+    async def get_deprecated_item(item_id: int):
+        """[DEPRECATED] Get a specific item by its ID (deprecated version)."""
+        return {"id": item_id}
+
+    @simple_fastapi_app.post(
+        "/deprecated/items/",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="create_deprecated_item",
+        deprecated=True,
+    )
+    async def create_deprecated_item():
+        """[DEPRECATED] Create a new item in the database (deprecated version)."""
+        return {"id": 1}
+
+    mcp_server = FastApiMCP(simple_fastapi_app)
+
+    # Should include regular operations but exclude deprecated ones
+    expected_operations = ["list_items", "get_item", "create_item", "update_item", "delete_item", "raise_error"]
+    deprecated_operations = ["list_deprecated_items", "get_deprecated_item", "create_deprecated_item"]
+
+    assert len(mcp_server.tools) == len(expected_operations)
+    assert len(mcp_server.operation_map) == len(expected_operations)
+
+    for op in expected_operations:
+        assert op in mcp_server.operation_map
+
+    for op in deprecated_operations:
+        assert op not in mcp_server.operation_map
+
+    for tool in mcp_server.tools:
+        assert tool.name in expected_operations
+        assert tool.name not in deprecated_operations
+
+
+def test_ignore_deprecated_false(simple_fastapi_app: FastAPI):
+    """Test that deprecated operations are included when ignore_deprecated=False."""
+
+    # Add deprecated operations to the simple app
+    @simple_fastapi_app.get(
+        "/deprecated/items/",
+        response_model=list,
+        tags=["deprecated"],
+        operation_id="list_deprecated_items",
+        deprecated=True,
+    )
+    async def list_deprecated_items():
+        """[DEPRECATED] List all items (deprecated version)."""
+        return []
+
+    @simple_fastapi_app.get(
+        "/deprecated/items/{item_id}",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="get_deprecated_item",
+        deprecated=True,
+    )
+    async def get_deprecated_item(item_id: int):
+        """[DEPRECATED] Get a specific item by its ID (deprecated version)."""
+        return {"id": item_id}
+
+    @simple_fastapi_app.post(
+        "/deprecated/items/",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="create_deprecated_item",
+        deprecated=True,
+    )
+    async def create_deprecated_item():
+        """[DEPRECATED] Create a new item in the database (deprecated version)."""
+        return {"id": 1}
+
+    mcp_server = FastApiMCP(simple_fastapi_app, ignore_deprecated=False)
+
+    # Should include both regular and deprecated operations
+    expected_operations = ["list_items", "get_item", "create_item", "update_item", "delete_item", "raise_error"]
+    deprecated_operations = ["list_deprecated_items", "get_deprecated_item", "create_deprecated_item"]
+    all_operations = expected_operations + deprecated_operations
+
+    assert len(mcp_server.tools) == len(all_operations)
+    assert len(mcp_server.operation_map) == len(all_operations)
+
+    for op in all_operations:
+        assert op in mcp_server.operation_map
+
+    for tool in mcp_server.tools:
+        assert tool.name in all_operations
+
+
+def test_ignore_deprecated_true_explicit(simple_fastapi_app: FastAPI):
+    """Test that deprecated operations are excluded when ignore_deprecated=True explicitly."""
+
+    # Add deprecated operations to the simple app
+    @simple_fastapi_app.get(
+        "/deprecated/items/",
+        response_model=list,
+        tags=["deprecated"],
+        operation_id="list_deprecated_items",
+        deprecated=True,
+    )
+    async def list_deprecated_items():
+        """[DEPRECATED] List all items (deprecated version)."""
+        return []
+
+    @simple_fastapi_app.get(
+        "/deprecated/items/{item_id}",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="get_deprecated_item",
+        deprecated=True,
+    )
+    async def get_deprecated_item(item_id: int):
+        """[DEPRECATED] Get a specific item by its ID (deprecated version)."""
+        return {"id": item_id}
+
+    @simple_fastapi_app.post(
+        "/deprecated/items/",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="create_deprecated_item",
+        deprecated=True,
+    )
+    async def create_deprecated_item():
+        """[DEPRECATED] Create a new item in the database (deprecated version)."""
+        return {"id": 1}
+
+    mcp_server = FastApiMCP(simple_fastapi_app, ignore_deprecated=True)
+
+    # Should include regular operations but exclude deprecated ones
+    expected_operations = ["list_items", "get_item", "create_item", "update_item", "delete_item", "raise_error"]
+    deprecated_operations = ["list_deprecated_items", "get_deprecated_item", "create_deprecated_item"]
+
+    assert len(mcp_server.tools) == len(expected_operations)
+    assert len(mcp_server.operation_map) == len(expected_operations)
+
+    for op in expected_operations:
+        assert op in mcp_server.operation_map
+
+    for op in deprecated_operations:
+        assert op not in mcp_server.operation_map
+
+    for tool in mcp_server.tools:
+        assert tool.name in expected_operations
+        assert tool.name not in deprecated_operations
+
+
+def test_ignore_deprecated_with_no_deprecated_operations(simple_fastapi_app: FastAPI):
+    """Test that ignore_deprecated works correctly when there are no deprecated operations."""
+    mcp_server_ignore_true = FastApiMCP(simple_fastapi_app, ignore_deprecated=True)
+    mcp_server_ignore_false = FastApiMCP(simple_fastapi_app, ignore_deprecated=False)
+
+    # Both should return the same results when there are no deprecated operations
+    assert len(mcp_server_ignore_true.tools) == len(mcp_server_ignore_false.tools)
+    assert len(mcp_server_ignore_true.operation_map) == len(mcp_server_ignore_false.operation_map)
+
+    expected_operations = ["list_items", "get_item", "create_item", "update_item", "delete_item", "raise_error"]
+
+    for op in expected_operations:
+        assert op in mcp_server_ignore_true.operation_map
+        assert op in mcp_server_ignore_false.operation_map
+
+    for tool in mcp_server_ignore_true.tools:
+        assert tool.name in expected_operations
+
+    for tool in mcp_server_ignore_false.tools:
+        assert tool.name in expected_operations
+
+
+def test_ignore_deprecated_combined_with_filtering(simple_fastapi_app: FastAPI):
+    """Test that ignore_deprecated works correctly when combined with other filtering options."""
+
+    # Add deprecated operations to the simple app
+    @simple_fastapi_app.get(
+        "/deprecated/items/",
+        response_model=list,
+        tags=["deprecated"],
+        operation_id="list_deprecated_items",
+        deprecated=True,
+    )
+    async def list_deprecated_items():
+        """[DEPRECATED] List all items (deprecated version)."""
+        return []
+
+    @simple_fastapi_app.get(
+        "/deprecated/items/{item_id}",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="get_deprecated_item",
+        deprecated=True,
+    )
+    async def get_deprecated_item(item_id: int):
+        """[DEPRECATED] Get a specific item by its ID (deprecated version)."""
+        return {"id": item_id}
+
+    @simple_fastapi_app.post(
+        "/deprecated/items/",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="create_deprecated_item",
+        deprecated=True,
+    )
+    async def create_deprecated_item():
+        """[DEPRECATED] Create a new item in the database (deprecated version)."""
+        return {"id": 1}
+
+    # Test with include_operations
+    mcp_server = FastApiMCP(
+        simple_fastapi_app, ignore_deprecated=True, include_operations=["list_items", "get_deprecated_item"]
+    )
+
+    # Should only include list_items since get_deprecated_item is deprecated and ignored
+    assert len(mcp_server.tools) == 1
+    assert "list_items" in mcp_server.operation_map
+    assert "get_deprecated_item" not in mcp_server.operation_map
+
+    # Test with include_tags
+    mcp_server = FastApiMCP(simple_fastapi_app, ignore_deprecated=True, include_tags=["deprecated"])
+
+    # Should not include any deprecated operations
+    assert len(mcp_server.tools) == 0
+
+    # Test with exclude_tags
+    mcp_server = FastApiMCP(simple_fastapi_app, ignore_deprecated=True, exclude_tags=["items"])
+
+    # Should only include raise_error since items are excluded and deprecated are ignored
+    assert len(mcp_server.tools) == 1
+    assert "raise_error" in mcp_server.operation_map
