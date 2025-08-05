@@ -20,11 +20,13 @@ class FastApiHttpSessionManager:
         event_store: EventStore | None = None,
         json_response: bool = True,  # Default to JSON for HTTP transport
         security_settings: TransportSecuritySettings | None = None,
+        stateless: bool = False,
     ):
         self.mcp_server = mcp_server
         self.event_store = event_store
         self.json_response = json_response
         self.security_settings = security_settings
+        self.stateless = stateless
         self._session_manager: StreamableHTTPSessionManager | None = None
         self._manager_task: asyncio.Task | None = None
         self._manager_started = False
@@ -47,13 +49,12 @@ class FastApiHttpSessionManager:
             logger.debug("Starting StreamableHTTP session manager")
 
             # Create the session manager
-            # Note: We don't use stateless=True because we want to support sessions
-            # but sessions are optional as per the MCP spec
+            # Use stateless flag to determine whether to support sessions
             self._session_manager = StreamableHTTPSessionManager(
                 app=self.mcp_server,
                 event_store=self.event_store,
                 json_response=self.json_response,
-                stateless=False,  # Always support sessions, but they're optional
+                stateless=self.stateless,  # Use the stateless flag
                 security_settings=self.security_settings,
             )
 
