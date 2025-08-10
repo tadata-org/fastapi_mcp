@@ -3,7 +3,7 @@ import httpx
 from typing import Dict, Optional, Any, List, Union, Literal, Sequence
 from typing_extensions import Annotated, Doc
 
-from fastapi import FastAPI, Request, APIRouter, params
+from fastapi import FastAPI, Request, Response, APIRouter, params
 from fastapi.openapi.utils import get_openapi
 from mcp.server.lowlevel.server import Server
 import mcp.types as types
@@ -192,6 +192,10 @@ class FastApiMCP:
         mount_path: str,
         dependencies: Optional[Sequence[params.Depends]],
     ):
+        @router.head(mount_path, include_in_schema=False, operation_id="mcp_connection", dependencies=dependencies)
+        async def handle_mcp_connection_head():
+            return Response(status_code=200)
+
         @router.get(mount_path, include_in_schema=False, operation_id="mcp_connection", dependencies=dependencies)
         async def handle_mcp_connection(request: Request):
             async with transport.connect_sse(request.scope, request.receive, request._send) as (reader, writer):
