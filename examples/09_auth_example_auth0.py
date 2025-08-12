@@ -117,7 +117,6 @@ mcp = FastApiMCP(
     description="Example of FastAPI-MCP with Auth0 authentication",
     auth_config=AuthConfig(
         issuer=f"https://{settings.auth0_domain}/",
-        authorize_url=f"https://{settings.auth0_domain}/authorize",
         oauth_metadata_url=settings.auth0_oauth_metadata_url,
         audience=settings.auth0_audience,
         client_id=settings.auth0_client_id,

@@ -254,12 +254,14 @@ class FastApiMCP:
     ):
         self._register_mcp_http_endpoint(router, transport, mount_path, dependencies)
 
-    def _setup_auth_2025_03_26(self):
+    async def _setup_auth_2025_03_26(self):
         from fastapi_mcp.auth.proxy import (
             setup_oauth_custom_metadata,
             setup_oauth_metadata_proxy,
             setup_oauth_authorize_proxy,
+            setup_oauth_callback_proxy,
             setup_oauth_fake_dynamic_register_endpoint,
+            discover_oauth_endpoints,
         )
 
         if self._auth_config:
@@ -277,11 +279,53 @@ class FastApiMCP:
                 if not metadata_url:
                     metadata_url = f"{self._auth_config.issuer}{self._auth_config.metadata_path}"
 
+                should_auto_discover = (
+                    not self._auth_config.authorize_url
+                    or not self._auth_config.token_url
+                    or not self._auth_config.user_info_url
+                )
+
+                if should_auto_discover:
+                    try:
+                        logger.info("Auto-discovering OAuth endpoints from metadata...")
+                        discovered = await discover_oauth_endpoints(metadata_url)
+
+                        # Use discovered URLs if not explicitly provided
+                        if not self._auth_config.authorize_url and discovered.authorization_endpoint:
+                            self._auth_config.authorize_url = discovered.authorization_endpoint
+                            logger.info(f"Auto-discovered authorize_url: {self._auth_config.authorize_url}")
+
+                        if not self._auth_config.token_url and discovered.token_endpoint:
+                            self._auth_config.token_url = discovered.token_endpoint
+                            logger.info(f"Auto-discovered token_url: {self._auth_config.token_url}")
+
+                        if not self._auth_config.user_info_url and discovered.userinfo_endpoint:
+                            self._auth_config.user_info_url = discovered.userinfo_endpoint
+                            logger.info(f"Auto-discovered user_info_url: {self._auth_config.user_info_url}")
+
+                    except Exception as e:
+                        # Don't crash yet, we'll validate the URLs below
+                        logger.error(f"Failed to auto-discover OAuth endpoints: {e}")
+
+                # Final validation - now error if we still don't have required URLs
+                if not self._auth_config.authorize_url:
+                    raise ValueError(
+                        "authorize_url is required when setup_proxies=True. "
+                        "Provide it explicitly or ensure oauth_metadata_url contains authorization_endpoint."
+                    )
+                if not self._auth_config.token_url:
+                    raise ValueError(
+                        "token_url is required when setup_proxies=True. "
+                        "Provide it explicitly or ensure oauth_metadata_url contains token_endpoint."
+                    )
+
                 setup_oauth_metadata_proxy(
                     app=self.fastapi,
                     metadata_url=metadata_url,
                     path=self._auth_config.metadata_path,
                     register_path="/oauth/register" if self._auth_config.setup_fake_dynamic_registration else None,
+                    token_url_override=self._auth_config.token_url,
+                    user_info_url_override=self._auth_config.user_info_url,
                 )
                 setup_oauth_authorize_proxy(
                     app=self.fastapi,
@@ -289,6 +333,13 @@ class FastApiMCP:
                     authorize_url=self._auth_config.authorize_url,
                     audience=self._auth_config.audience,
                     default_scope=self._auth_config.default_scope,
+                )
+                setup_oauth_callback_proxy(
+                    app=self.fastapi,
+                    client_id=self._auth_config.client_id,
+                    client_secret=self._auth_config.client_secret,
+                    token_url=self._auth_config.token_url,
+                    user_info_url=self._auth_config.user_info_url,
                 )
                 if self._auth_config.setup_fake_dynamic_registration:
                     assert self._auth_config.client_secret is not None
@@ -301,7 +352,9 @@ class FastApiMCP:
     def _setup_auth(self):
         if self._auth_config:
             if self._auth_config.version == "2025-03-26":
-                self._setup_auth_2025_03_26()
+                import asyncio
+
+                asyncio.run(self._setup_auth_2025_03_26())
             else:
                 raise ValueError(
                     f"Unsupported MCP spec version: {self._auth_config.version}. Please check your AuthConfig."

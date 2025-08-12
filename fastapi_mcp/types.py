@@ -169,6 +169,30 @@ class OAuthMetadata(BaseType):
 OAuthMetadataDict = Annotated[Union[Dict[str, Any], OAuthMetadata], OAuthMetadata]
 
 
+class OAuthMetadataResponse(BaseType):
+    """Response from an OAuth provider's metadata endpoint."""
+
+    authorization_endpoint: Annotated[
+        Optional[StrHttpUrl],
+        Doc("The authorization endpoint URL from OAuth metadata"),
+    ] = None
+
+    token_endpoint: Annotated[
+        Optional[StrHttpUrl],
+        Doc("The token endpoint URL from OAuth metadata"),
+    ] = None
+
+    userinfo_endpoint: Annotated[
+        Optional[StrHttpUrl],
+        Doc("The user info endpoint URL from OAuth metadata"),
+    ] = None
+
+    issuer: Annotated[
+        Optional[StrHttpUrl],
+        Doc("The issuer identifier from OAuth metadata"),
+    ] = None
+
+
 class AuthConfig(BaseType):
     version: Annotated[
         Literal["2025-03-26"],
@@ -228,9 +252,13 @@ class AuthConfig(BaseType):
 
             If not provided, FastAPI-MCP will attempt to guess based on the `issuer` and `metadata_path`.
 
+            When setup_proxies=True, this URL is used for:
+            1. Serving OAuth metadata to MCP clients
+            2. Auto-discovering missing endpoint URLs (authorize_url, token_url, user_info_url)
+
             Only relevant if `setup_proxies` is `True`.
 
-            If this URL is wrong, the metadata proxy will not work.
+            If this URL is wrong, the metadata proxy and auto-discovery will not work.
             """
         ),
     ] = None
@@ -241,7 +269,39 @@ class AuthConfig(BaseType):
             """
             The URL of your OAuth provider's authorization endpoint.
 
+            If not provided when setup_proxies=True, will be auto-discovered from oauth_metadata_url.
+
             Usually this is something like `https://app.example.com/oauth/authorize`.
+            """
+        ),
+    ] = None
+
+    token_url: Annotated[
+        Optional[StrHttpUrl],
+        Doc(
+            """
+            The URL of your OAuth provider's token endpoint.
+
+            If not provided when setup_proxies=True, will be auto-discovered from oauth_metadata_url.
+
+            Used by the callback proxy to exchange authorization codes for access tokens.
+
+            Usually this is something like `https://app.example.com/oauth/token`.
+            """
+        ),
+    ] = None
+
+    user_info_url: Annotated[
+        Optional[StrHttpUrl],
+        Doc(
+            """
+            The URL of your OAuth provider's user info endpoint (optional).
+
+            If not provided, will attempt auto-discovery from oauth_metadata_url.
+            When available, the callback proxy will fetch user profile information
+            and include it in the forwarded response.
+
+            Usually this is something like `https://app.example.com/userinfo`.
             """
         ),
     ] = None
@@ -360,8 +420,20 @@ class AuthConfig(BaseType):
             if self.client_id is None:
                 raise ValueError("'client_id' is required when 'setup_proxies' is True")
 
-            if self.setup_fake_dynamic_registration and not self.client_secret:
-                raise ValueError("'client_secret' is required when 'setup_fake_dynamic_registration' is True")
+            if self.client_secret is None:
+                raise ValueError(
+                    "'client_secret' is required when 'setup_proxies' is True (needed for OAuth callback proxy)"
+                )
+
+            has_explicit_urls = self.authorize_url and self.token_url
+            has_metadata_for_discovery = self.oauth_metadata_url or self.issuer
+
+            if not has_explicit_urls and not has_metadata_for_discovery:
+                raise ValueError(
+                    "When 'setup_proxies' is True, you must provide either: "
+                    "1) Both 'authorize_url' and 'token_url' explicitly, or "
+                    "2) 'oauth_metadata_url' (or 'issuer') for automatic endpoint discovery"
+                )
 
         return self
 
