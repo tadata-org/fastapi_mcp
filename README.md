@@ -23,6 +23,17 @@
 
 </div>
 
+<div align="center">
+  <!-- Keep these links. Translations will automatically update with the README. -->
+  <a href="https://readme-i18n.com/de/tadata-org/fastapi_mcp">Deutsch</a> | 
+  <a href="https://readme-i18n.com/es/tadata-org/fastapi_mcp">Español</a> | 
+  <a href="https://readme-i18n.com/fr/tadata-org/fastapi_mcp">français</a> | 
+  <a href="https://readme-i18n.com/ja/tadata-org/fastapi_mcp">日本語</a> | 
+  <a href="https://readme-i18n.com/ko/tadata-org/fastapi_mcp">한국어</a> | 
+  <a href="https://readme-i18n.com/pt/tadata-org/fastapi_mcp">Português</a> | 
+  <a href="https://readme-i18n.com/ru/tadata-org/fastapi_mcp">Русский</a> | 
+  <a href="https://readme-i18n.com/zh/tadata-org/fastapi_mcp">中文</a>
+</div>
 
 <p align="center"><a href="https://github.com/tadata-org/fastapi_mcp"><img src="https://github.com/user-attachments/assets/b205adc6-28c0-4e3c-a68b-9c1a80eb7d0c" alt="fastapi-mcp-usage" height="400"/></a></p>
 
