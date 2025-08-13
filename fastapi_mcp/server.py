@@ -254,13 +254,14 @@ class FastApiMCP:
     ):
         self._register_mcp_http_endpoint(router, transport, mount_path, dependencies)
 
-    async def _setup_auth_2025_03_26(self):
+    async def _setup_auth_2025_06_18(self):
         from fastapi_mcp.auth.proxy import (
             setup_oauth_custom_metadata,
             setup_oauth_metadata_proxy,
             setup_oauth_authorize_proxy,
             setup_oauth_callback_proxy,
             setup_oauth_fake_dynamic_register_endpoint,
+            setup_oauth_protected_resource_metadata,
             discover_oauth_endpoints,
         )
 
@@ -341,6 +342,10 @@ class FastApiMCP:
                     token_url=self._auth_config.token_url,
                     user_info_url=self._auth_config.user_info_url,
                 )
+                setup_oauth_protected_resource_metadata(
+                    app=self.fastapi,
+                    auth_config=self._auth_config,
+                )
                 if self._auth_config.setup_fake_dynamic_registration:
                     assert self._auth_config.client_secret is not None
                     setup_oauth_fake_dynamic_register_endpoint(
@@ -351,10 +356,10 @@ class FastApiMCP:
 
     def _setup_auth(self):
         if self._auth_config:
-            if self._auth_config.version == "2025-03-26":
+            if self._auth_config.version == "2025-06-18":
                 import asyncio
 
-                asyncio.run(self._setup_auth_2025_03_26())
+                asyncio.run(self._setup_auth_2025_06_18())
             else:
                 raise ValueError(
                     f"Unsupported MCP spec version: {self._auth_config.version}. Please check your AuthConfig."

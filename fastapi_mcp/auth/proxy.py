@@ -546,6 +546,57 @@ def setup_oauth_callback_proxy(
             )
 
 
+def setup_oauth_protected_resource_metadata(
+    app: Annotated[
+        FastAPI,
+        Doc("The FastAPI app instance"),
+    ],
+    auth_config: Annotated[
+        AuthConfig,
+        Doc("The auth configuration containing authorization server details"),
+    ],
+    path: Annotated[
+        str, Doc("The path to mount the protected resource metadata endpoint at")
+    ] = "/.well-known/oauth-protected-resource",
+    include_in_schema: Annotated[
+        bool,
+        Doc("Whether to include the metadata endpoint in your OpenAPI docs"),
+    ] = False,
+):
+    """
+    OAuth 2.0 Protected Resource Metadata endpoint according to RFC 9728.
+
+    This endpoint provides metadata about the MCP server as an OAuth 2.1 resource server.
+    This allows the MCP server to act purely as a resource server, without being an authorization server.
+    """
+
+    @app.get(
+        path,
+        response_model=Dict[str, Any],
+        include_in_schema=include_in_schema,
+        operation_id="oauth_protected_resource_metadata",
+    )
+    async def oauth_protected_resource_metadata(request: Request):
+        base_url = str(request.base_url).rstrip("/")
+
+        scopes_supported = ["openid", "profile", "email"]  # Default fallback
+        if auth_config.default_scope:
+            scopes_supported = auth_config.default_scope.split()
+
+        metadata = {
+            "resource": base_url,
+            "authorization_servers": [str(auth_config.issuer)],
+            "scopes_supported": scopes_supported,
+            "bearer_methods_supported": ["header"],
+            "resource_documentation": f"{base_url}/docs",
+        }
+
+        if auth_config.audience:
+            metadata["audience"] = [auth_config.audience]
+
+        return metadata
+
+
 def setup_oauth_fake_dynamic_register_endpoint(
     app: Annotated[FastAPI, Doc("The FastAPI app instance")],
     client_id: Annotated[str, Doc("The client ID of the pre-registered client")],

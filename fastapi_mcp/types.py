@@ -195,14 +195,14 @@ class OAuthMetadataResponse(BaseType):
 
 class AuthConfig(BaseType):
     version: Annotated[
-        Literal["2025-03-26"],
+        Literal["2025-06-18"],
         Doc(
             """
             The MCP spec version to use for setting up authorization.
-            Currently only "2025-03-26" is supported.
+            Currently only "2025-06-18" is supported.
             """
         ),
-    ] = "2025-03-26"
+    ] = "2025-06-18"
 
     dependencies: Annotated[
         Optional[Sequence[params.Depends]],
@@ -389,9 +389,7 @@ class AuthConfig(BaseType):
             """
             Whether to automatically setup a fake dynamic client registration endpoint.
 
-            In MCP 2025-03-26 Spec, it is recommended to support OAuth Dynamic Client Registration (RFC 7591).
-            Furthermore, `npx mcp-remote` which is the current de-facto client that supports MCP's up-to-date spec,
-            requires this endpoint to be present.
+            In MCP 2025-06-18 Spec, it is recommended to support OAuth Dynamic Client Registration (RFC 7591).
 
             For most cases, a fake dynamic registration endpoint is enough, thus you should set this to `True`.
 
