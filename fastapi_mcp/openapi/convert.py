@@ -18,6 +18,7 @@ def convert_openapi_to_mcp_tools(
     openapi_schema: Dict[str, Any],
     describe_all_responses: bool = False,
     describe_full_response_schema: bool = False,
+    ignore_deprecated: bool = True,
 ) -> Tuple[List[types.Tool], Dict[str, Dict[str, Any]]]:
     """
     Convert OpenAPI operations to MCP tools.
@@ -26,6 +27,7 @@ def convert_openapi_to_mcp_tools(
         openapi_schema: The OpenAPI schema
         describe_all_responses: Whether to include all possible response schemas in tool descriptions
         describe_full_response_schema: Whether to include full response schema in tool descriptions
+        ignore_deprecated: Whether to ignore deprecated operations when converting to MCP tools
 
     Returns:
         A tuple containing:
@@ -44,6 +46,11 @@ def convert_openapi_to_mcp_tools(
             # Skip non-HTTP methods
             if method not in ["get", "post", "put", "delete", "patch"]:
                 logger.warning(f"Skipping non-HTTP method: {method}")
+                continue
+
+            is_deprecated = operation.get("deprecated", False)
+            if is_deprecated and ignore_deprecated:
+                logger.warning(f"Skipping deprecated operation: {method} {path}")
                 continue
 
             # Get operation metadata

@@ -422,3 +422,232 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     if "items" in properties:
         item_props = properties["items"]["items"]["properties"]
         assert "total" in item_props
+
+
+def test_ignore_deprecated_default_behavior(simple_fastapi_app: FastAPI):
+    """Test that deprecated operations are ignored by default."""
+
+    # Add deprecated operations to the simple app
+    @simple_fastapi_app.get(
+        "/deprecated/items/",
+        response_model=list,
+        tags=["deprecated"],
+        operation_id="list_deprecated_items",
+        deprecated=True,
+    )
+    async def list_deprecated_items():
+        """[DEPRECATED] List all items (deprecated version)."""
+        return []
+
+    @simple_fastapi_app.get(
+        "/deprecated/items/{item_id}",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="get_deprecated_item",
+        deprecated=True,
+    )
+    async def get_deprecated_item(item_id: int):
+        """[DEPRECATED] Get a specific item by its ID (deprecated version)."""
+        return {"id": item_id}
+
+    @simple_fastapi_app.post(
+        "/deprecated/items/",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="create_deprecated_item",
+        deprecated=True,
+    )
+    async def create_deprecated_item():
+        """[DEPRECATED] Create a new item in the database (deprecated version)."""
+        return {"id": 1}
+
+    openapi_schema = get_openapi(
+        title=simple_fastapi_app.title,
+        version=simple_fastapi_app.version,
+        openapi_version=simple_fastapi_app.openapi_version,
+        description=simple_fastapi_app.description,
+        routes=simple_fastapi_app.routes,
+    )
+
+    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
+
+    # Should include regular operations but exclude deprecated ones
+    expected_operations = ["list_items", "get_item", "create_item", "update_item", "delete_item", "raise_error"]
+    deprecated_operations = ["list_deprecated_items", "get_deprecated_item", "create_deprecated_item"]
+
+    assert len(tools) == len(expected_operations)
+    assert len(operation_map) == len(expected_operations)
+
+    for op in expected_operations:
+        assert op in operation_map
+
+    for op in deprecated_operations:
+        assert op not in operation_map
+
+    for tool in tools:
+        assert isinstance(tool, types.Tool)
+        assert tool.name in expected_operations
+        assert tool.name not in deprecated_operations
+
+
+def test_ignore_deprecated_false(simple_fastapi_app: FastAPI):
+    """Test that deprecated operations are included when ignore_deprecated=False."""
+
+    # Add deprecated operations to the simple app
+    @simple_fastapi_app.get(
+        "/deprecated/items/",
+        response_model=list,
+        tags=["deprecated"],
+        operation_id="list_deprecated_items",
+        deprecated=True,
+    )
+    async def list_deprecated_items():
+        """[DEPRECATED] List all items (deprecated version)."""
+        return []
+
+    @simple_fastapi_app.get(
+        "/deprecated/items/{item_id}",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="get_deprecated_item",
+        deprecated=True,
+    )
+    async def get_deprecated_item(item_id: int):
+        """[DEPRECATED] Get a specific item by its ID (deprecated version)."""
+        return {"id": item_id}
+
+    @simple_fastapi_app.post(
+        "/deprecated/items/",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="create_deprecated_item",
+        deprecated=True,
+    )
+    async def create_deprecated_item():
+        """[DEPRECATED] Create a new item in the database (deprecated version)."""
+        return {"id": 1}
+
+    openapi_schema = get_openapi(
+        title=simple_fastapi_app.title,
+        version=simple_fastapi_app.version,
+        openapi_version=simple_fastapi_app.openapi_version,
+        description=simple_fastapi_app.description,
+        routes=simple_fastapi_app.routes,
+    )
+
+    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema, ignore_deprecated=False)
+
+    # Should include both regular and deprecated operations
+    expected_operations = ["list_items", "get_item", "create_item", "update_item", "delete_item", "raise_error"]
+    deprecated_operations = ["list_deprecated_items", "get_deprecated_item", "create_deprecated_item"]
+    all_operations = expected_operations + deprecated_operations
+
+    assert len(tools) == len(all_operations)
+    assert len(operation_map) == len(all_operations)
+
+    for op in all_operations:
+        assert op in operation_map
+
+    for tool in tools:
+        assert isinstance(tool, types.Tool)
+        assert tool.name in all_operations
+
+
+def test_ignore_deprecated_true_explicit(simple_fastapi_app: FastAPI):
+    """Test that deprecated operations are excluded when ignore_deprecated=True explicitly."""
+
+    # Add deprecated operations to the simple app
+    @simple_fastapi_app.get(
+        "/deprecated/items/",
+        response_model=list,
+        tags=["deprecated"],
+        operation_id="list_deprecated_items",
+        deprecated=True,
+    )
+    async def list_deprecated_items():
+        """[DEPRECATED] List all items (deprecated version)."""
+        return []
+
+    @simple_fastapi_app.get(
+        "/deprecated/items/{item_id}",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="get_deprecated_item",
+        deprecated=True,
+    )
+    async def get_deprecated_item(item_id: int):
+        """[DEPRECATED] Get a specific item by its ID (deprecated version)."""
+        return {"id": item_id}
+
+    @simple_fastapi_app.post(
+        "/deprecated/items/",
+        response_model=dict,
+        tags=["deprecated"],
+        operation_id="create_deprecated_item",
+        deprecated=True,
+    )
+    async def create_deprecated_item():
+        """[DEPRECATED] Create a new item in the database (deprecated version)."""
+        return {"id": 1}
+
+    openapi_schema = get_openapi(
+        title=simple_fastapi_app.title,
+        version=simple_fastapi_app.version,
+        openapi_version=simple_fastapi_app.openapi_version,
+        description=simple_fastapi_app.description,
+        routes=simple_fastapi_app.routes,
+    )
+
+    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema, ignore_deprecated=True)
+
+    # Should include regular operations but exclude deprecated ones
+    expected_operations = ["list_items", "get_item", "create_item", "update_item", "delete_item", "raise_error"]
+    deprecated_operations = ["list_deprecated_items", "get_deprecated_item", "create_deprecated_item"]
+
+    assert len(tools) == len(expected_operations)
+    assert len(operation_map) == len(expected_operations)
+
+    for op in expected_operations:
+        assert op in operation_map
+
+    for op in deprecated_operations:
+        assert op not in operation_map
+
+    for tool in tools:
+        assert isinstance(tool, types.Tool)
+        assert tool.name in expected_operations
+        assert tool.name not in deprecated_operations
+
+
+def test_ignore_deprecated_with_no_deprecated_operations(simple_fastapi_app: FastAPI):
+    """Test that ignore_deprecated works correctly when there are no deprecated operations."""
+    openapi_schema = get_openapi(
+        title=simple_fastapi_app.title,
+        version=simple_fastapi_app.version,
+        openapi_version=simple_fastapi_app.openapi_version,
+        description=simple_fastapi_app.description,
+        routes=simple_fastapi_app.routes,
+    )
+
+    tools_ignore_true, operation_map_ignore_true = convert_openapi_to_mcp_tools(openapi_schema, ignore_deprecated=True)
+    tools_ignore_false, operation_map_ignore_false = convert_openapi_to_mcp_tools(
+        openapi_schema, ignore_deprecated=False
+    )
+
+    # Both should return the same results when there are no deprecated operations
+    assert len(tools_ignore_true) == len(tools_ignore_false)
+    assert len(operation_map_ignore_true) == len(operation_map_ignore_false)
+
+    expected_operations = ["list_items", "get_item", "create_item", "update_item", "delete_item", "raise_error"]
+
+    for op in expected_operations:
+        assert op in operation_map_ignore_true
+        assert op in operation_map_ignore_false
+
+    for tool in tools_ignore_true:
+        assert isinstance(tool, types.Tool)
+        assert tool.name in expected_operations
+
+    for tool in tools_ignore_false:
+        assert isinstance(tool, types.Tool)
+        assert tool.name in expected_operations
