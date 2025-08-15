@@ -581,3 +581,84 @@ def test_filtering_with_empty_tags_array():
     exclude_tags_mcp = FastApiMCP(app, exclude_tags=["items"])
     assert len(exclude_tags_mcp.tools) == 1
     assert {tool.name for tool in exclude_tags_mcp.tools} == {"empty_tags"}
+
+
+def test_include_response_info_default_behavior(simple_fastapi_app: FastAPI):
+    """Test the default behavior of include_response_info parameter."""
+    mcp_server = FastApiMCP(simple_fastapi_app)
+
+    # Check default value
+    assert mcp_server._include_response_info is True
+
+    # Check that response information is included by default
+    for tool in mcp_server.tools:
+        assert tool.description is not None
+        if tool.name == "raise_error":
+            pass
+        elif tool.name != "delete_item":
+            assert "### Responses:" in tool.description, "Response section should be present"
+            assert "**200**" in tool.description, "200 status code should be present"
+            assert "**Example Response:**" in tool.description, "Example response should be present"
+        else:
+            # The delete endpoint returns 204 with no response body
+            assert "### Responses:" in tool.description, "Response section should be present"
+            assert "**204**" in tool.description, "204 status code should be present"
+
+
+def test_include_response_info_false_simple_app(simple_fastapi_app: FastAPI):
+    """Test include_response_info=False with the simple app."""
+    mcp_server = FastApiMCP(simple_fastapi_app, include_response_info=False)
+
+    # Check that response information is excluded
+    for tool in mcp_server.tools:
+        assert tool.description is not None
+        assert "### Responses:" not in tool.description, "Response section should not be present"
+        assert "**200**" not in tool.description, "200 status code should not be present"
+        assert "**204**" not in tool.description, "204 status code should not be present"
+        assert "**Example Response:**" not in tool.description, "Example response should not be present"
+        assert "**Output Schema:**" not in tool.description, "Output schema should not be present"
+
+        # Basic tool information should still be present
+        if tool.name == "list_items":
+            assert "List all items" in tool.description
+        elif tool.name == "get_item":
+            assert "Get a specific item" in tool.description
+        elif tool.name == "create_item":
+            assert "Create a new item" in tool.description
+
+
+def test_include_response_info_combined_with_other_options(simple_fastapi_app: FastAPI):
+    """Test include_response_info combined with other response-related options."""
+    # Test with include_response_info=False and describe_all_responses=True
+    mcp_server = FastApiMCP(
+        simple_fastapi_app,
+        include_response_info=False,
+        describe_all_responses=True,
+        describe_full_response_schema=True,
+    )
+
+    # Even with describe_all_responses=True and describe_full_response_schema=True,
+    # response information should be excluded when include_response_info=False
+    for tool in mcp_server.tools:
+        assert tool.description is not None
+        assert "### Responses:" not in tool.description, "Response section should not be present"
+        assert "**Example Response:**" not in tool.description, "Example response should not be present"
+        assert "**Output Schema:**" not in tool.description, "Output schema should not be present"
+
+
+def test_include_response_info_true_explicit(simple_fastapi_app: FastAPI):
+    """Test include_response_info=True explicitly."""
+    mcp_server = FastApiMCP(simple_fastapi_app, include_response_info=True)
+
+    # Check that response information is included
+    for tool in mcp_server.tools:
+        assert tool.description is not None
+        if tool.name == "raise_error":
+            pass
+        elif tool.name != "delete_item":
+            assert "### Responses:" in tool.description, "Response section should be present"
+            assert "**200**" in tool.description, "200 status code should be present"
+            assert "**Example Response:**" in tool.description, "Example response should be present"
+        else:
+            assert "### Responses:" in tool.description, "Response section should be present"
+            assert "**204**" in tool.description, "204 status code should be present"

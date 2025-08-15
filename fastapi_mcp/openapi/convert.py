@@ -18,6 +18,7 @@ def convert_openapi_to_mcp_tools(
     openapi_schema: Dict[str, Any],
     describe_all_responses: bool = False,
     describe_full_response_schema: bool = False,
+    include_response_info: bool = True,
 ) -> Tuple[List[types.Tool], Dict[str, Dict[str, Any]]]:
     """
     Convert OpenAPI operations to MCP tools.
@@ -26,6 +27,7 @@ def convert_openapi_to_mcp_tools(
         openapi_schema: The OpenAPI schema
         describe_all_responses: Whether to include all possible response schemas in tool descriptions
         describe_full_response_schema: Whether to include full response schema in tool descriptions
+        include_response_info: Whether to include response information in tool descriptions
 
     Returns:
         A tuple containing:
@@ -70,7 +72,7 @@ def convert_openapi_to_mcp_tools(
 
             # Add response information to the description
             responses = operation.get("responses", {})
-            if responses:
+            if responses and include_response_info:
                 response_info = "\n\n### Responses:\n"
 
                 # Find the success response
