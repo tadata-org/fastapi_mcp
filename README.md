@@ -82,7 +82,7 @@ That's it! Your auto-generated MCP server is now available at `https://app.base.
 
 ## Documentation, Examples and Advanced Usage
 
-FastAPI-MCP provides [comprehensive documentation](https://fastapi-mcp.tadata.com/). Additionaly, check out the [examples directory](examples) for code samples demonstrating these features in action.
+FastAPI-MCP provides [comprehensive documentation](https://fastapi-mcp.tadata.com/). Additionally, check out the [examples directory](examples) for code samples demonstrating these features in action.
 
 ## FastAPI-first Approach
 
