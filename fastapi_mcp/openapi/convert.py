@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import mcp.types as types
 
@@ -52,12 +52,18 @@ def convert_openapi_to_mcp_tools(
                 logger.warning(f"Skipping operation with no operationId: {operation}")
                 continue
 
+            # Detect content type and form fields from request body
+            request_body = operation.get("requestBody", {})
+            content_type, form_fields = _detect_content_type_and_form_fields(request_body)
+
             # Save operation details for later HTTP calls
             operation_map[operation_id] = {
                 "path": path,
                 "method": method,
                 "parameters": operation.get("parameters", []),
-                "request_body": operation.get("requestBody", {}),
+                "request_body": request_body,
+                "content_type": content_type,
+                "form_fields": form_fields,
             }
 
             summary = operation.get("summary", "")
@@ -113,7 +119,7 @@ def convert_openapi_to_mcp_tools(
 
                                 # Check if content has examples
                                 if "examples" in content_data:
-                                    for example_key, example_data in content_data["examples"].items():
+                                    for example_data in content_data["examples"].values():
                                         if "value" in example_data:
                                             example_response = example_data["value"]
                                             break
@@ -265,3 +271,51 @@ def convert_openapi_to_mcp_tools(
             tools.append(tool)
 
     return tools, operation_map
+
+
+def _detect_content_type_and_form_fields(request_body: Dict[str, Any]) -> Tuple[Optional[str], List[str]]:
+    """
+    Detect the content type and form fields from a request body schema.
+
+    Args:
+        request_body: The requestBody section from OpenAPI operation
+
+    Returns:
+        A tuple of (content_type, form_fields) where:
+        - content_type is the detected content type or None
+        - form_fields is a list of form field names or empty list
+    """
+    if not request_body or "content" not in request_body:
+        return None, []
+
+    content = request_body["content"]
+
+    # Priority order: form-encoded > multipart > JSON
+    content_type_priorities = [
+        "application/x-www-form-urlencoded",
+        "multipart/form-data",
+        "application/json",
+    ]
+
+    # Find the highest priority content type that exists
+    detected_content_type = None
+    for content_type in content_type_priorities:
+        if content_type in content:
+            detected_content_type = content_type
+            break
+
+    # If no supported content type found, return None
+    if not detected_content_type:
+        return None, []
+
+    # Extract form fields for form-based content types
+    form_fields = []
+    if detected_content_type in [
+        "application/x-www-form-urlencoded",
+        "multipart/form-data",
+    ]:
+        content_schema = content[detected_content_type].get("schema", {})
+        if "properties" in content_schema:
+            form_fields = list(content_schema["properties"].keys())
+
+    return detected_content_type, form_fields
