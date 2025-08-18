@@ -377,6 +377,129 @@ def test_body_params_descriptions_and_defaults(complex_fastapi_app: FastAPI):
         assert item_props["quantity"]["default"] == 1
 
 
+def test_content_type_detection():
+    """Test the content type detection functionality for form parameters."""
+    from fastapi_mcp.openapi.convert import _detect_content_type_and_form_fields
+
+    # Test form-encoded content type detection
+    form_encoded_request_body = {
+        "content": {
+            "application/x-www-form-urlencoded": {
+                "schema": {
+                    "type": "object",
+                    "properties": {"username": {"type": "string"}, "password": {"type": "string"}},
+                }
+            }
+        }
+    }
+
+    content_type, form_fields = _detect_content_type_and_form_fields(form_encoded_request_body)
+    assert content_type == "application/x-www-form-urlencoded"
+    assert set(form_fields) == {"username", "password"}
+
+    # Test multipart content type detection
+    multipart_request_body = {
+        "content": {
+            "multipart/form-data": {
+                "schema": {
+                    "type": "object",
+                    "properties": {"file": {"type": "string", "format": "binary"}, "description": {"type": "string"}},
+                }
+            }
+        }
+    }
+
+    content_type, form_fields = _detect_content_type_and_form_fields(multipart_request_body)
+    assert content_type == "multipart/form-data"
+    assert set(form_fields) == {"file", "description"}
+
+    # Test JSON content type detection (fallback)
+    json_request_body = {
+        "content": {
+            "application/json": {
+                "schema": {"type": "object", "properties": {"name": {"type": "string"}, "age": {"type": "integer"}}}
+            }
+        }
+    }
+
+    content_type, form_fields = _detect_content_type_and_form_fields(json_request_body)
+    assert content_type == "application/json"
+    assert form_fields == []  # No form fields for JSON
+
+    # Test priority logic - form-encoded should win over JSON
+    mixed_request_body = {
+        "content": {
+            "application/json": {"schema": {"type": "object", "properties": {"data": {"type": "string"}}}},
+            "application/x-www-form-urlencoded": {
+                "schema": {"type": "object", "properties": {"form_field": {"type": "string"}}}
+            },
+        }
+    }
+
+    content_type, form_fields = _detect_content_type_and_form_fields(mixed_request_body)
+    assert content_type == "application/x-www-form-urlencoded"
+    assert form_fields == ["form_field"]
+
+    # Test multipart should win over JSON but lose to form-encoded
+    mixed_request_body_2 = {
+        "content": {
+            "application/json": {"schema": {"type": "object", "properties": {"data": {"type": "string"}}}},
+            "multipart/form-data": {
+                "schema": {"type": "object", "properties": {"upload": {"type": "string", "format": "binary"}}}
+            },
+        }
+    }
+
+    content_type, form_fields = _detect_content_type_and_form_fields(mixed_request_body_2)
+    assert content_type == "multipart/form-data"
+    assert form_fields == ["upload"]
+
+    # Test empty request body
+    content_type, form_fields = _detect_content_type_and_form_fields({})
+    assert content_type is None
+    assert form_fields == []
+
+    # Test request body without content
+    content_type, form_fields = _detect_content_type_and_form_fields({"required": True})
+    assert content_type is None
+    assert form_fields == []
+
+    # Test unsupported content type
+    unsupported_request_body = {"content": {"application/xml": {"schema": {"type": "string"}}}}
+
+    content_type, form_fields = _detect_content_type_and_form_fields(unsupported_request_body)
+    assert content_type is None
+    assert form_fields == []
+
+
+def test_operation_map_includes_content_type_info(complex_fastapi_app: FastAPI):
+    """Test that the operation map includes content type and form fields information."""
+    openapi_schema = get_openapi(
+        title=complex_fastapi_app.title,
+        version=complex_fastapi_app.version,
+        openapi_version=complex_fastapi_app.openapi_version,
+        description=complex_fastapi_app.description,
+        routes=complex_fastapi_app.routes,
+    )
+
+    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
+
+    # Check that all operations have the new fields
+    for operation_id, operation_info in operation_map.items():
+        assert "content_type" in operation_info
+        assert "form_fields" in operation_info
+
+        # For the complex app, create_order should have JSON content type
+        if operation_id == "create_order":
+            assert operation_info["content_type"] == "application/json"
+            assert operation_info["form_fields"] == []
+
+        # GET operations should have no content type
+        if operation_info["method"] == "get":
+            assert operation_info["content_type"] is None
+            assert operation_info["form_fields"] == []
+
+
 def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     """
     Test handling of edge cases for body parameters, such as:

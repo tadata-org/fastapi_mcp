@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 def get_single_param_type_from_schema(param_schema: Dict[str, Any]) -> str:
@@ -162,3 +162,56 @@ def generate_example_from_schema(schema: Dict[str, Any]) -> Any:
 
     # Default case
     return None
+
+
+def detect_form_encoded_content_type(request_body: Dict[str, Any]) -> bool:
+    """
+    Detect if a request body uses application/x-www-form-urlencoded content type.
+
+    Args:
+        request_body: The requestBody section from OpenAPI operation
+
+    Returns:
+        True if form-encoded content type is detected, False otherwise
+    """
+    if not request_body or "content" not in request_body:
+        return False
+
+    content = request_body["content"]
+    return "application/x-www-form-urlencoded" in content
+
+
+def detect_multipart_content_type(request_body: Dict[str, Any]) -> bool:
+    """
+    Detect if a request body uses multipart/form-data content type.
+
+    Args:
+        request_body: The requestBody section from OpenAPI operation
+
+    Returns:
+        True if multipart content type is detected, False otherwise
+    """
+    if not request_body or "content" not in request_body:
+        return False
+
+    content = request_body["content"]
+    return "multipart/form-data" in content
+
+
+def extract_form_field_names(schema: Dict[str, Any]) -> List[str]:
+    """
+    Extract form field names from schema properties.
+
+    Args:
+        schema: The schema object containing properties
+
+    Returns:
+        List of form field names, or empty list if no properties found
+    """
+    if not schema or not isinstance(schema, dict):
+        return []
+
+    if "properties" not in schema:
+        return []
+
+    return list(schema["properties"].keys())
