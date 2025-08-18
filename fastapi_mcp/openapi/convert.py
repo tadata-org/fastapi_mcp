@@ -57,7 +57,27 @@ def convert_openapi_to_mcp_tools(
 
             # Detect content type and form fields from request body
             request_body = operation.get("requestBody", {})
-            content_type, form_fields = _detect_content_type_and_form_fields(request_body)
+            try:
+                content_type, form_fields = _detect_content_type_and_form_fields(request_body)
+                if content_type:
+                    logger.info(
+                        "Content type detection successful for operation %s: %s with %d form fields",
+                        operation_id,
+                        content_type,
+                        len(form_fields),
+                    )
+                else:
+                    logger.debug(
+                        "No specific content type detected for operation %s, will use default JSON behavior",
+                        operation_id,
+                    )
+            except Exception as e:
+                logger.error(
+                    "Content type detection failed for operation %s: %s. Using default JSON behavior",
+                    operation_id,
+                    str(e),
+                )
+                content_type, form_fields = None, []
 
             # Save operation details for later HTTP calls
             operation_map[operation_id] = {
@@ -289,9 +309,12 @@ def _detect_content_type_and_form_fields(request_body: Dict[str, Any]) -> Tuple[
         - form_fields is a list of form field names or empty list
     """
     if not request_body or "content" not in request_body:
+        logger.debug("No request body or content found, using default JSON behavior")
         return None, []
 
     content = request_body["content"]
+    available_content_types = list(content.keys())
+    logger.debug("Available content types for analysis: %s", available_content_types)
 
     # Priority order: form-encoded > multipart > JSON
     detected_content_type = None
@@ -299,15 +322,21 @@ def _detect_content_type_and_form_fields(request_body: Dict[str, Any]) -> Tuple[
     # Check for form-encoded first (highest priority)
     if detect_form_encoded_content_type(request_body):
         detected_content_type = "application/x-www-form-urlencoded"
+        logger.debug("Detected form-encoded content type (priority 1)")
     # Check for multipart second
     elif detect_multipart_content_type(request_body):
         detected_content_type = "multipart/form-data"
+        logger.debug("Detected multipart content type (priority 2)")
     # Check for JSON as fallback
     elif "application/json" in content:
         detected_content_type = "application/json"
+        logger.debug("Detected JSON content type (fallback)")
 
-    # If no supported content type found, return None
+    # If no supported content type found, log and return None
     if not detected_content_type:
+        logger.warning(
+            "No supported content type found in %s, falling back to default JSON behavior", available_content_types
+        )
         return None, []
 
     # Extract form fields for form-based content types
@@ -316,7 +345,30 @@ def _detect_content_type_and_form_fields(request_body: Dict[str, Any]) -> Tuple[
         "application/x-www-form-urlencoded",
         "multipart/form-data",
     ]:
-        content_schema = content[detected_content_type].get("schema", {})
-        form_fields = extract_form_field_names(content_schema)
+        try:
+            content_schema = content[detected_content_type].get("schema", {})
+            if not content_schema:
+                logger.warning("No schema found for %s content type, cannot extract form fields", detected_content_type)
+                return None, []
 
+            form_fields = extract_form_field_names(content_schema)
+            logger.debug(
+                "Successfully extracted %d form fields for %s: %s", len(form_fields), detected_content_type, form_fields
+            )
+
+            if not form_fields:
+                logger.warning(
+                    "No form fields found in schema for %s, falling back to JSON behavior", detected_content_type
+                )
+                return None, []
+
+        except Exception as e:
+            logger.error(
+                "Failed to extract form fields from schema for %s: %s. Falling back to JSON behavior",
+                detected_content_type,
+                str(e),
+            )
+            return None, []
+
+    logger.info("Content type detection complete: %s with %d form fields", detected_content_type, len(form_fields))
     return detected_content_type, form_fields
