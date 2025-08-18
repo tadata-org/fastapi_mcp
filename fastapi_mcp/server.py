@@ -537,11 +537,20 @@ class FastApiMCP:
                 if name.lower() in self._forward_headers:
                     headers[name] = value
 
-        body = arguments if arguments else None
+        # Separate form fields from other parameters based on operation metadata
+        content_type = operation.get("content_type")
+        form_fields = operation.get("form_fields", [])
+
+        if content_type in ["application/x-www-form-urlencoded", "multipart/form-data"] and form_fields:
+            # Only include form fields in the body for form-encoded requests
+            body = {k: v for k, v in arguments.items() if k in form_fields}
+        else:
+            # For JSON or other content types, include all remaining arguments
+            body = arguments if arguments else None
 
         try:
             logger.debug(f"Making {method.upper()} request to {path}")
-            response = await self._request(client, method, path, query, headers, body)
+            response = await self._request(client, method, path, query, headers, body, content_type)
 
             # TODO: Better typing for the AsyncClientProtocol. It should return a ResponseProtocol that has a json() method that returns a dict/list/etc.
             try:
@@ -577,19 +586,39 @@ class FastApiMCP:
         query: Dict[str, Any],
         headers: Dict[str, str],
         body: Optional[Any],
+        content_type: Optional[str] = None,
     ) -> Any:
         if method.lower() == "get":
             return await client.get(path, params=query, headers=headers)
         elif method.lower() == "post":
-            return await client.post(path, params=query, headers=headers, json=body)
+            return await self._request_with_body(client, "post", path, query, headers, body, content_type)
         elif method.lower() == "put":
-            return await client.put(path, params=query, headers=headers, json=body)
+            return await self._request_with_body(client, "put", path, query, headers, body, content_type)
         elif method.lower() == "delete":
             return await client.delete(path, params=query, headers=headers)
         elif method.lower() == "patch":
-            return await client.patch(path, params=query, headers=headers, json=body)
+            return await self._request_with_body(client, "patch", path, query, headers, body, content_type)
         else:
             raise ValueError(f"Unsupported HTTP method: {method}")
+
+    async def _request_with_body(
+        self,
+        client: httpx.AsyncClient,
+        method: str,
+        path: str,
+        query: Dict[str, Any],
+        headers: Dict[str, str],
+        body: Optional[Any],
+        content_type: Optional[str] = None,
+    ) -> Any:
+        """Handle requests with body content, using appropriate encoding based on content type."""
+        if content_type == "application/x-www-form-urlencoded":
+            return await client.request(method, path, params=query, headers=headers, data=body)
+        elif content_type == "multipart/form-data":
+            return await client.request(method, path, params=query, headers=headers, files=body)
+        else:
+            # Default to JSON for backward compatibility
+            return await client.request(method, path, params=query, headers=headers, json=body)
 
     def _filter_tools(self, tools: List[types.Tool], openapi_schema: Dict[str, Any]) -> List[types.Tool]:
         """
