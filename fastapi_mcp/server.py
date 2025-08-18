@@ -541,12 +541,13 @@ class FastApiMCP:
         content_type = operation.get("content_type")
         form_fields = operation.get("form_fields", [])
 
+        body: Optional[Any]
         if content_type in ["application/x-www-form-urlencoded", "multipart/form-data"] and form_fields:
             # Only include form fields in the body for form-encoded requests
             body = {k: v for k, v in arguments.items() if k in form_fields}
         else:
             # For JSON or other content types, include all remaining arguments
-            body = arguments if arguments else None
+            body = arguments or None
 
         try:
             logger.debug(f"Making {method.upper()} request to {path}")
