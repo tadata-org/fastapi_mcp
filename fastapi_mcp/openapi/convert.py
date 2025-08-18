@@ -58,7 +58,9 @@ def convert_openapi_to_mcp_tools(
             # Detect content type and form fields from request body
             request_body = operation.get("requestBody", {})
             try:
-                content_type, form_fields = _detect_content_type_and_form_fields(request_body)
+                content_type, form_fields = _detect_content_type_and_form_fields(
+                    request_body
+                )
                 if content_type:
                     logger.info(
                         "Content type detection successful for operation %s: %s with %d form fields",
@@ -114,7 +116,9 @@ def convert_openapi_to_mcp_tools(
                 responses_to_include = responses
                 if not describe_all_responses and success_response:
                     # If we're not describing all responses, only include the success response
-                    success_code = next((code for code in success_codes if str(code) in responses), None)
+                    success_code = next(
+                        (code for code in success_codes if str(code) in responses), None
+                    )
                     if success_code:
                         responses_to_include = {str(success_code): success_response}
 
@@ -129,7 +133,9 @@ def convert_openapi_to_mcp_tools(
 
                     # Add schema information if available
                     if "content" in response_data:
-                        for content_type, content_data in response_data["content"].items():
+                        for content_type, content_data in response_data[
+                            "content"
+                        ].items():
                             if "schema" in content_data:
                                 schema = content_data["schema"]
                                 response_info += f"\nContent-Type: {content_type}"
@@ -142,7 +148,9 @@ def convert_openapi_to_mcp_tools(
 
                                 # Check if content has examples
                                 if "examples" in content_data:
-                                    for example_data in content_data["examples"].values():
+                                    for example_data in content_data[
+                                        "examples"
+                                    ].values():
                                         if "value" in example_data:
                                             example_response = example_data["value"]
                                             break
@@ -152,33 +160,56 @@ def convert_openapi_to_mcp_tools(
 
                                 # If we have an example response, add it to the docs
                                 if example_response:
-                                    response_info += "\n\n**Example Response:**\n```json\n"
-                                    response_info += json.dumps(example_response, indent=2)
+                                    response_info += (
+                                        "\n\n**Example Response:**\n```json\n"
+                                    )
+                                    response_info += json.dumps(
+                                        example_response, indent=2
+                                    )
                                     response_info += "\n```"
                                 # Otherwise generate an example from the schema
                                 else:
-                                    generated_example = generate_example_from_schema(display_schema)
+                                    generated_example = generate_example_from_schema(
+                                        display_schema
+                                    )
                                     if generated_example:
-                                        response_info += "\n\n**Example Response:**\n```json\n"
-                                        response_info += json.dumps(generated_example, indent=2)
+                                        response_info += (
+                                            "\n\n**Example Response:**\n```json\n"
+                                        )
+                                        response_info += json.dumps(
+                                            generated_example, indent=2
+                                        )
                                         response_info += "\n```"
 
                                 # Only include full schema information if requested
                                 if describe_full_response_schema:
                                     # Format schema information based on its type
-                                    if display_schema.get("type") == "array" and "items" in display_schema:
+                                    if (
+                                        display_schema.get("type") == "array"
+                                        and "items" in display_schema
+                                    ):
                                         items_schema = display_schema["items"]
 
                                         response_info += "\n\n**Output Schema:** Array of items with the following structure:\n```json\n"
-                                        response_info += json.dumps(items_schema, indent=2)
+                                        response_info += json.dumps(
+                                            items_schema, indent=2
+                                        )
                                         response_info += "\n```"
                                     elif "properties" in display_schema:
-                                        response_info += "\n\n**Output Schema:**\n```json\n"
-                                        response_info += json.dumps(display_schema, indent=2)
+                                        response_info += (
+                                            "\n\n**Output Schema:**\n```json\n"
+                                        )
+                                        response_info += json.dumps(
+                                            display_schema, indent=2
+                                        )
                                         response_info += "\n```"
                                     else:
-                                        response_info += "\n\n**Output Schema:**\n```json\n"
-                                        response_info += json.dumps(display_schema, indent=2)
+                                        response_info += (
+                                            "\n\n**Output Schema:**\n```json\n"
+                                        )
+                                        response_info += json.dumps(
+                                            display_schema, indent=2
+                                        )
                                         response_info += "\n```"
 
                 tool_description += response_info
@@ -229,7 +260,9 @@ def convert_openapi_to_mcp_tools(
             for param_name, param in path_params:
                 param_schema = param.get("schema", {})
                 param_desc = param.get("description", "")
-                param_required = param.get("required", True)  # Path params are usually required
+                param_required = param.get(
+                    "required", True
+                )  # Path params are usually required
 
                 properties[param_name] = param_schema.copy()
                 properties[param_name]["title"] = param_name
@@ -254,7 +287,9 @@ def convert_openapi_to_mcp_tools(
                     properties[param_name]["description"] = param_desc
 
                 if "type" not in properties[param_name]:
-                    properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
+                    properties[param_name]["type"] = get_single_param_type_from_schema(
+                        param_schema
+                    )
 
                 if "default" in param_schema:
                     properties[param_name]["default"] = param_schema["default"]
@@ -274,7 +309,9 @@ def convert_openapi_to_mcp_tools(
                     properties[param_name]["description"] = param_desc
 
                 if "type" not in properties[param_name]:
-                    properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
+                    properties[param_name]["type"] = get_single_param_type_from_schema(
+                        param_schema
+                    )
 
                 if "default" in param_schema:
                     properties[param_name]["default"] = param_schema["default"]
@@ -283,20 +320,30 @@ def convert_openapi_to_mcp_tools(
                     required_props.append(param_name)
 
             # Create a proper input schema for the tool
-            input_schema = {"type": "object", "properties": properties, "title": f"{operation_id}Arguments"}
+            input_schema = {
+                "type": "object",
+                "properties": properties,
+                "title": f"{operation_id}Arguments",
+            }
 
             if required_props:
                 input_schema["required"] = required_props
 
             # Create the MCP tool definition
-            tool = types.Tool(name=operation_id, description=tool_description, inputSchema=input_schema)
+            tool = types.Tool(
+                name=operation_id,
+                description=tool_description,
+                inputSchema=input_schema,
+            )
 
             tools.append(tool)
 
     return tools, operation_map
 
 
-def _detect_content_type_and_form_fields(request_body: Dict[str, Any]) -> Tuple[Optional[str], List[str]]:
+def _detect_content_type_and_form_fields(
+    request_body: Optional[Dict[str, Any]]
+) -> Tuple[Optional[str], List[str]]:
     """
     Detect the content type and form fields from a request body schema.
 
@@ -335,7 +382,8 @@ def _detect_content_type_and_form_fields(request_body: Dict[str, Any]) -> Tuple[
     # If no supported content type found, log and return None
     if not detected_content_type:
         logger.warning(
-            "No supported content type found in %s, falling back to default JSON behavior", available_content_types
+            "No supported content type found in %s, falling back to default JSON behavior",
+            available_content_types,
         )
         return None, []
 
@@ -348,17 +396,24 @@ def _detect_content_type_and_form_fields(request_body: Dict[str, Any]) -> Tuple[
         try:
             content_schema = content[detected_content_type].get("schema", {})
             if not content_schema:
-                logger.warning("No schema found for %s content type, cannot extract form fields", detected_content_type)
+                logger.warning(
+                    "No schema found for %s content type, cannot extract form fields",
+                    detected_content_type,
+                )
                 return None, []
 
             form_fields = extract_form_field_names(content_schema)
             logger.debug(
-                "Successfully extracted %d form fields for %s: %s", len(form_fields), detected_content_type, form_fields
+                "Successfully extracted %d form fields for %s: %s",
+                len(form_fields),
+                detected_content_type,
+                form_fields,
             )
 
             if not form_fields:
                 logger.warning(
-                    "No form fields found in schema for %s, falling back to JSON behavior", detected_content_type
+                    "No form fields found in schema for %s, falling back to JSON behavior",
+                    detected_content_type,
                 )
                 return None, []
 
@@ -370,5 +425,9 @@ def _detect_content_type_and_form_fields(request_body: Dict[str, Any]) -> Tuple[
             )
             return None, []
 
-    logger.info("Content type detection complete: %s with %d form fields", detected_content_type, len(form_fields))
+    logger.info(
+        "Content type detection complete: %s with %d form fields",
+        detected_content_type,
+        len(form_fields),
+    )
     return detected_content_type, form_fields
