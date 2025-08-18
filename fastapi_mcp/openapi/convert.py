@@ -9,6 +9,9 @@ from .utils import (
     generate_example_from_schema,
     resolve_schema_references,
     get_single_param_type_from_schema,
+    detect_form_encoded_content_type,
+    detect_multipart_content_type,
+    extract_form_field_names,
 )
 
 logger = logging.getLogger(__name__)
@@ -291,18 +294,17 @@ def _detect_content_type_and_form_fields(request_body: Dict[str, Any]) -> Tuple[
     content = request_body["content"]
 
     # Priority order: form-encoded > multipart > JSON
-    content_type_priorities = [
-        "application/x-www-form-urlencoded",
-        "multipart/form-data",
-        "application/json",
-    ]
-
-    # Find the highest priority content type that exists
     detected_content_type = None
-    for content_type in content_type_priorities:
-        if content_type in content:
-            detected_content_type = content_type
-            break
+
+    # Check for form-encoded first (highest priority)
+    if detect_form_encoded_content_type(request_body):
+        detected_content_type = "application/x-www-form-urlencoded"
+    # Check for multipart second
+    elif detect_multipart_content_type(request_body):
+        detected_content_type = "multipart/form-data"
+    # Check for JSON as fallback
+    elif "application/json" in content:
+        detected_content_type = "application/json"
 
     # If no supported content type found, return None
     if not detected_content_type:
@@ -315,7 +317,6 @@ def _detect_content_type_and_form_fields(request_body: Dict[str, Any]) -> Tuple[
         "multipart/form-data",
     ]:
         content_schema = content[detected_content_type].get("schema", {})
-        if "properties" in content_schema:
-            form_fields = list(content_schema["properties"].keys())
+        form_fields = extract_form_field_names(content_schema)
 
     return detected_content_type, form_fields
