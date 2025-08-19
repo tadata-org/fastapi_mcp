@@ -80,6 +80,30 @@ mcp.mount()
 
 That's it! Your auto-generated MCP server is now available at `https://app.base.url/mcp`.
 
+## Remote OpenAPI Schema
+
+You can configure FastApiMCP to fetch the OpenAPI schema from a remote FastAPI server by providing a custom httpx.AsyncClient and setting `fetch_openapi_from_remote=True`:
+
+```python
+import httpx
+from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
+
+REMOTE_API_URL = "http://127.0.0.1:5000"
+app = FastAPI()
+client = httpx.AsyncClient(base_url=REMOTE_API_URL)
+
+mcp = FastApiMCP(
+    app,
+    name="MCP for Remote API",
+    http_client=client,
+    fetch_openapi_from_remote=True,
+)
+mcp.mount()
+```
+
+If `fetch_openapi_from_remote` is set and a custom client is provided, FastApiMCP will retrieve the OpenAPI schema from the remote server's `/openapi.json` endpoint instead of generating it locally.
+
 ## Documentation, Examples and Advanced Usage
 
 FastAPI-MCP provides [comprehensive documentation](https://fastapi-mcp.tadata.com/). Additionaly, check out the [examples directory](examples) for code samples demonstrating these features in action.
