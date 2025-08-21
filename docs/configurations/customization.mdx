@@ -45,6 +45,7 @@ mcp.mount_http()
 ## Customizing Exposed Endpoints
 
 You can control which FastAPI endpoints are exposed as MCP tools using Open API operation IDs or tags to:
+
 - Only include specific operations
 - Exclude specific operations
 - Only include operations with specific tags
@@ -121,6 +122,7 @@ The relevant arguments for these configurations are `include_operations`, `exclu
     )
     mcp.mount_http()
     ```
+
 </CodeGroup>
 
 ### Notes on filtering
@@ -129,3 +131,31 @@ The relevant arguments for these configurations are `include_operations`, `exclu
 - You cannot use both `include_tags` and `exclude_tags` at the same time
 - You can combine operation filtering with tag filtering (e.g., use `include_operations` with `include_tags`)
 - When combining filters, a greedy approach will be taken. Endpoints matching either criteria will be included
+
+## Forwarding HTTP headers
+
+By default the MCP server will forward the `Authorization` header from an incoming MCP request to the underlying FastAPI endpoint when invoking tools. You can customize the list of forwarded headers when creating `FastApiMCP` by passing the `headers` parameter (a list of header names). The comparison is case-insensitive.
+
+Example — forward a custom `X-API-Key` header in addition to `Authorization`:
+
+```python
+from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
+
+app = FastAPI()
+
+mcp = FastApiMCP(
+    app,
+    name="My API MCP",
+    description="Very cool MCP server",
+    headers=["authorization", "x-api-key"],  # add any header names you want forwarded
+)
+
+mcp.mount_http()
+```
+
+Notes:
+
+- Header names are normalized to lower-case internally, so provide regular header names (for example `X-API-Key` or `x-api-key`).
+- Only headers present on the incoming MCP request will be forwarded. If you use custom transports or proxies, ensure the header arrives at the MCP endpoint.
+- Be careful forwarding sensitive headers. Only include headers that are intended to be proxied to the underlying API endpoints.
