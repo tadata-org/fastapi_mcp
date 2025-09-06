@@ -140,7 +140,10 @@ def convert_openapi_to_mcp_tools(
                                     if display_schema.get("type") == "array" and "items" in display_schema:
                                         items_schema = display_schema["items"]
 
-                                        response_info += "\n\n**Output Schema:** Array of items with the following structure:\n```json\n"
+                                        response_info += (
+                                            "\n\n**Output Schema:** Array of items with the following "
+                                            "structure:\n```json\n"
+                                        )
                                         response_info += json.dumps(items_schema, indent=2)
                                         response_info += "\n```"
                                     elif "properties" in display_schema:

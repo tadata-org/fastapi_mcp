@@ -5,6 +5,11 @@ def get_single_param_type_from_schema(param_schema: Dict[str, Any]) -> str:
     """
     Get the type of a parameter from the schema.
     If the schema is a union type, return the first type.
+
+    Args:
+        param_schema (Dict[str, Any]): Schema definition.
+    Returns:
+        str: The type of a parameter.
     """
     if "anyOf" in param_schema:
         types = {schema.get("type") for schema in param_schema["anyOf"] if schema.get("type")}
@@ -25,7 +30,7 @@ def resolve_schema_references(schema_part: Dict[str, Any], reference_schema: Dic
         reference_schema: The complete schema used to resolve references from
 
     Returns:
-        The schema with references resolved
+        dict: The schema with references resolved
     """
     # Make a copy to avoid modifying the input schema
     schema_part = schema_part.copy()
@@ -65,7 +70,7 @@ def clean_schema_for_display(schema: Dict[str, Any]) -> Dict[str, Any]:
         schema: The schema to clean
 
     Returns:
-        The cleaned schema
+        dict: The cleaned schema
     """
     # Make a copy to avoid modifying the input schema
     schema = schema.copy()

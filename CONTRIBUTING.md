@@ -11,7 +11,7 @@ First off, thank you for considering contributing to FastAPI-MCP!
 
     ```bash
     git clone https://github.com/YOUR-USERNAME/fastapi_mcp.git
-    cd fastapi-mcp
+    cd fastapi_mcp
 
     # Add the upstream remote
     git remote add upstream https://github.com/tadata-org/fastapi_mcp.git
