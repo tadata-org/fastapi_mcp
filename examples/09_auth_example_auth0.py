@@ -128,7 +128,7 @@ mcp = FastApiMCP(
 )
 
 # Mount the MCP server
-mcp.mount()
+mcp.mount_http()
 
 
 if __name__ == "__main__":

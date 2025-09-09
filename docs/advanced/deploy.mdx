@@ -24,7 +24,7 @@ mcp_app = FastAPI()
 mcp = FastApiMCP(api_app)
 
 # Mount the MCP server to the separate app
-mcp.mount(mcp_app)
+mcp.mount_http(mcp_app)
 ```
 
 Then, you can run both apps separately:

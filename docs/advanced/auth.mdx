@@ -49,7 +49,7 @@ mcp = FastApiMCP(
         dependencies=[Depends(verify_auth)],
     ),
 )
-mcp.mount()
+mcp.mount_http()
 ```
 
 For a complete working example of authorization header, check out the [Token Passthrough Example](https://github.com/tadata-org/fastapi_mcp/blob/main/examples/08_auth_example_token_passthrough.py) in the examples folder.
@@ -79,7 +79,7 @@ mcp = FastApiMCP(
     ),
 )
 
-mcp.mount()
+mcp.mount_http()
 ```
 
 And you can call it like:
@@ -131,7 +131,7 @@ mcp = FastApiMCP(
     ),
 )
 
-mcp.mount()
+mcp.mount_http()
 ```
 
 This approach gives you complete control over the OAuth metadata and is useful when:
@@ -195,8 +195,8 @@ You also need to make sure to configure callback URLs properly in your OAuth pro
 Proxies solve several problems:
 
 1.  **Missing registration endpoints**:  
-    The MCP spec expects OAuth providers to support [dynamic client registration (RFC 7591)](https://datatracker.ietf.org/doc/html/rfc7591), but many don't.  
-    Furthermore, dynamic client registration is probably overkill for most use cases.  
+    The MCP spec expects OAuth providers to support [dynamic client registration (RFC 7591)](https://datatracker.ietf.org/doc/html/rfc7591), but many don't.
+    Furthermore, dynamic client registration is probably overkill for most use cases.
     The `setup_fake_dynamic_registration` option (True by default) creates a compatible endpoint that just returns a static client ID and secret.
 
 2.  **Scope handling**:  

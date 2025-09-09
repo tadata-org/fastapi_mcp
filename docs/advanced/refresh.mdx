@@ -13,7 +13,7 @@ from fastapi_mcp import FastApiMCP
 app = FastAPI()
 
 mcp = FastApiMCP(app)
-mcp.mount()
+mcp.mount_http()
 
 # Add new endpoints after MCP server creation
 @app.get("/new/endpoint/", operation_id="new_endpoint")

@@ -1,4 +1,4 @@
-from examples.shared.apps.items import app # The FastAPI app
+from examples.shared.apps.items import app  # The FastAPI app
 from examples.shared.setup import setup_logging
 
 from fastapi_mcp import FastApiMCP
@@ -9,7 +9,7 @@ setup_logging()
 mcp = FastApiMCP(app)
 
 # Mount the MCP server to the FastAPI app
-mcp.mount()
+mcp.mount_http()
 
 
 if __name__ == "__main__":

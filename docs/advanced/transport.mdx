@@ -1,31 +1,91 @@
 ---
-title: Transport
-description: How to communicate with the FastAPI app
+title: MCP Transport
+description: Understanding MCP transport methods and how to choose between them
 icon: car
 ---
 
-FastAPI-MCP uses ASGI transport by default, which means it communicates directly with your FastAPI app without making HTTP requests. This is more efficient and doesn't require a base URL.
+FastAPI-MCP supports two MCP transport methods for client-server communication: **HTTP transport** (recommended) and **SSE transport** (backwards compatibility).
 
-It's not even necessary that the FastAPI server will run.
+## HTTP Transport (Recommended)
 
-If you need to specify a custom base URL or use a different transport method, you can provide your own `httpx.AsyncClient`:
+HTTP transport is the **recommended** transport method as it implements the latest MCP Streamable HTTP specification. It provides better session management, more robust connection handling, and aligns with standard HTTP practices.
 
-```python {7-10, 14}
-import httpx
+### Using HTTP Transport
+
+```python {7}
 from fastapi import FastAPI
 from fastapi_mcp import FastApiMCP
 
 app = FastAPI()
+mcp = FastApiMCP(app)
 
-custom_client = httpx.AsyncClient(
-    base_url="https://api.example.com",
-    timeout=30.0
-)
+# Mount using HTTP transport (recommended)
+mcp.mount_http()
+```
 
-mcp = FastApiMCP(
-    app,
-    http_client=custom_client
-)
+## SSE Transport (Backwards Compatibility)
 
-mcp.mount()
+SSE (Server-Sent Events) transport is maintained for backwards compatibility with older MCP implementations.
+
+### Using SSE Transport
+
+```python {7}
+from fastapi import FastAPI
+from fastapi_mcp import FastApiMCP
+
+app = FastAPI()
+mcp = FastApiMCP(app)
+
+# Mount using SSE transport (backwards compatibility)
+mcp.mount_sse()
+```
+
+## Advanced Configuration
+
+Both transport methods support the same FastAPI integration features like custom routing and authentication:
+
+```python
+from fastapi import FastAPI, APIRouter
+from fastapi_mcp import FastApiMCP
+
+app = FastAPI()
+router = APIRouter(prefix="/api/v1")
+
+mcp = FastApiMCP(app)
+
+# Mount to custom path with HTTP transport
+mcp.mount_http(router, mount_path="/my-http")
+
+# Or with SSE transport
+mcp.mount_sse(router, mount_path="/my-sse")
+```
+
+## Client Connection Examples
+
+### HTTP Transport Client Connection
+
+For HTTP transport, MCP clients connect directly to the HTTP endpoint:
+
+```json
+{
+  "mcpServers": {
+    "fastapi-mcp": {
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+### SSE Transport Client Connection
+
+For SSE transport, MCP clients use the same URL but communicate via Server-Sent Events:
+
+```json
+{
+  "mcpServers": {
+    "fastapi-mcp": {
+      "url": "http://localhost:8000/sse"
+    }
+  }
+}
 ```

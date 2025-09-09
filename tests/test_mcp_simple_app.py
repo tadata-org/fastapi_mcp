@@ -112,7 +112,7 @@ async def test_error_handling(lowlevel_server_simple_app: Server):
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
         assert "item_id" in text_content.text.lower() or "missing" in text_content.text.lower()
-        assert "422" in text_content.text, "Expected a 422 status to appear in the response text"
+        assert "input validation error" in text_content.text.lower(), "Expected an input validation error"
 
 
 @pytest.mark.asyncio
@@ -368,3 +368,76 @@ async def test_custom_header_passthrough_to_tool_handler(fastapi_mcp_with_custom
             headers_arg = mock_request.call_args[0][4]  # headers are the 5th argument
             assert "X-Custom-Header" in headers_arg
             assert headers_arg["X-Custom-Header"] == "MyValue123"
+
+
+@pytest.mark.asyncio
+async def test_context_extraction_in_tool_handler(fastapi_mcp: FastApiMCP):
+    """Test that handle_call_tool extracts HTTP request info from MCP context."""
+    from unittest.mock import patch, MagicMock
+    import mcp.types as types
+    from mcp.server.lowlevel.server import request_ctx
+
+    # Create a fake HTTP request object with headers
+    fake_http_request = MagicMock()
+    fake_http_request.method = "POST"
+    fake_http_request.url.path = "/test"
+    fake_http_request.headers = {"Authorization": "Bearer token-123", "X-Custom": "custom-value-123"}
+    fake_http_request.cookies = {}
+    fake_http_request.query_params = {}
+
+    # Create a fake request context containing the HTTP request
+    fake_request_context = MagicMock()
+    fake_request_context.request = fake_http_request
+
+    # Test with authorization header extraction from context
+    token = request_ctx.set(fake_request_context)
+    try:
+        with patch.object(fastapi_mcp, "_execute_api_tool") as mock_execute:
+            mock_execute.return_value = [types.TextContent(type="text", text="success")]
+
+            # Create a CallToolRequest like the MCP protocol would
+            call_request = types.CallToolRequest(
+                method="tools/call", params=types.CallToolRequestParams(name="get_item", arguments={"item_id": 1})
+            )
+
+            try:
+                # Call the tool handler directly like the MCP server would
+                await fastapi_mcp.server.request_handlers[types.CallToolRequest](call_request)
+            except Exception:
+                pass
+
+            assert mock_execute.called, "The _execute_api_tool method was not called"
+
+            if mock_execute.called:
+                # Verify that HTTPRequestInfo was extracted from context and passed to _execute_api_tool
+                http_request_info = mock_execute.call_args.kwargs["http_request_info"]
+                assert http_request_info is not None, "HTTPRequestInfo should be extracted from context"
+                assert http_request_info.method == "POST"
+                assert http_request_info.path == "/test"
+                assert "Authorization" in http_request_info.headers
+                assert http_request_info.headers["Authorization"] == "Bearer token-123"
+                assert "X-Custom" in http_request_info.headers
+                assert http_request_info.headers["X-Custom"] == "custom-value-123"
+    finally:
+        # Clean up the context variable
+        request_ctx.reset(token)
+
+    # Test with missing request context (should still work but with None)
+    with patch.object(fastapi_mcp, "_execute_api_tool") as mock_execute:
+        mock_execute.return_value = [types.TextContent(type="text", text="success")]
+
+        call_request = types.CallToolRequest(
+            method="tools/call", params=types.CallToolRequestParams(name="get_item", arguments={"item_id": 1})
+        )
+
+        try:
+            await fastapi_mcp.server.request_handlers[types.CallToolRequest](call_request)
+        except Exception:
+            pass
+
+        assert mock_execute.called, "The _execute_api_tool method was not called"
+
+        if mock_execute.called:
+            # Verify that HTTPRequestInfo is None when context is not available
+            http_request_info = mock_execute.call_args.kwargs["http_request_info"]
+            assert http_request_info is None, "HTTPRequestInfo should be None when context is not available"
