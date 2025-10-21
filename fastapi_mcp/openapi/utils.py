@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Set, Optional
 
 
 def get_single_param_type_from_schema(param_schema: Dict[str, Any]) -> str:
@@ -16,42 +16,64 @@ def get_single_param_type_from_schema(param_schema: Dict[str, Any]) -> str:
     return param_schema.get("type", "string")
 
 
-def resolve_schema_references(schema_part: Dict[str, Any], reference_schema: Dict[str, Any]) -> Dict[str, Any]:
+def resolve_schema_references(
+    schema_part: Dict[str, Any], reference_schema: Dict[str, Any], visited_paths: Optional[Set[str]] = None
+) -> Dict[str, Any]:
     """
-    Resolve schema references in OpenAPI schemas.
+    Resolve schema references in OpenAPI schemas with circular reference detection.
 
     Args:
         schema_part: The part of the schema being processed that may contain references
         reference_schema: The complete schema used to resolve references from
+        visited_paths: Set of already visited reference paths to detect circular references
 
     Returns:
         The schema with references resolved
     """
+    if visited_paths is None:
+        visited_paths = set()
+
     # Make a copy to avoid modifying the input schema
     schema_part = schema_part.copy()
 
     # Handle $ref directly in the schema
     if "$ref" in schema_part:
         ref_path = schema_part["$ref"]
+
+        # Check for circular reference
+        if ref_path in visited_paths:
+            # Return a placeholder schema to break the cycle
+            return {"type": "object", "description": "Circular reference detected", "properties": {}}
+
         # Standard OpenAPI references are in the format "#/components/schemas/ModelName"
         if ref_path.startswith("#/components/schemas/"):
             model_name = ref_path.split("/")[-1]
             if "components" in reference_schema and "schemas" in reference_schema["components"]:
                 if model_name in reference_schema["components"]["schemas"]:
-                    # Replace with the resolved schema
+                    # Add current path to visited paths
+                    visited_paths.add(ref_path)
+
+                    # Get the referenced schema and resolve it recursively
                     ref_schema = reference_schema["components"]["schemas"][model_name].copy()
-                    # Remove the $ref key and merge with the original schema
+                    resolved_ref = resolve_schema_references(ref_schema, reference_schema, visited_paths)
+
+                    # Remove the $ref key and merge with the resolved schema
                     schema_part.pop("$ref")
-                    schema_part.update(ref_schema)
+                    schema_part.update(resolved_ref)
+
+                    # Remove from visited paths after processing
+                    visited_paths.remove(ref_path)
+                    return schema_part
 
     # Recursively resolve references in all dictionary values
     for key, value in schema_part.items():
         if isinstance(value, dict):
-            schema_part[key] = resolve_schema_references(value, reference_schema)
+            schema_part[key] = resolve_schema_references(value, reference_schema, visited_paths)
         elif isinstance(value, list):
             # Only process list items that are dictionaries since only they can contain refs
             schema_part[key] = [
-                resolve_schema_references(item, reference_schema) if isinstance(item, dict) else item for item in value
+                resolve_schema_references(item, reference_schema, visited_paths) if isinstance(item, dict) else item
+                for item in value
             ]
 
     return schema_part
