@@ -54,6 +54,22 @@ mcp.mount_http()
 
 For a complete working example of authorization header, check out the [Token Passthrough Example](https://github.com/tadata-org/fastapi_mcp/blob/main/examples/08_auth_example_token_passthrough.py) in the examples folder.
 
+### Forwarding Custom HTTP Headers
+
+By default, `FastApiMCP` forwards the `authorization` header from the incoming MCP request into each tool invocation.  
+However, the server also supports forwarding **any additional headers** you choose. This is controlled by the `headers` parameter in `FastApiMCP`, which acts as an allowlist.
+
+```python
+from fastapi_mcp import FastApiMCP
+
+mcp = FastApiMCP(
+    app,
+    name="MCP With Custom headers Passthrough",
+    headers=["authorization", "user_id", "some-other-custom-header"],
+)
+mcp.mount_http()
+```
+
 ## OAuth Flow
 
 FastAPI-MCP supports the full OAuth 2 flow, compliant with [MCP Spec 2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization).
