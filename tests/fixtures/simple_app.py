@@ -16,7 +16,18 @@ def make_simple_fastapi_app(parametrized_config: dict[str, Any] | None = None) -
         Item(id=3, name="Item 3", price=30.0, tags=["tag3", "tag4"], description="Item 3 description"),
     ]
 
-    @app.get("/items/", response_model=List[Item], tags=["items"], operation_id="list_items")
+    @app.get(
+        "/items/",
+        response_model=List[Item],
+        tags=["items"],
+        operation_id="list_items",
+        openapi_extra={
+            "x-mcp-annotations": {
+                "readOnlyHint": True,
+                "openWorldHint": False,
+            }
+        },
+    )
     async def list_items(
         skip: int = Query(0, description="Number of items to skip"),
         limit: int = Query(10, description="Max number of items to return"),
@@ -25,7 +36,18 @@ def make_simple_fastapi_app(parametrized_config: dict[str, Any] | None = None) -
         """List all items with pagination and sorting options."""
         return items[skip : skip + limit]
 
-    @app.get("/items/{item_id}", response_model=Item, tags=["items"], operation_id="get_item")
+    @app.get(
+        "/items/{item_id}",
+        response_model=Item,
+        tags=["items"],
+        operation_id="get_item",
+        openapi_extra={
+            "x-mcp-annotations": {
+                "readOnlyHint": True,
+                "openWorldHint": False,
+            }
+        },
+    )
     async def read_item(
         item_id: int = Path(..., description="The ID of the item to retrieve"),
         include_details: bool = Query(False, description="Include additional details"),
