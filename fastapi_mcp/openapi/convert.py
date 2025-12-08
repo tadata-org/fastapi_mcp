@@ -259,8 +259,21 @@ def convert_openapi_to_mcp_tools(
             if required_props:
                 input_schema["required"] = required_props
 
+            # Build tool annotations
+            try:
+                annotations = operation["x-mcp-annotations"]
+            except KeyError:
+                annotations = None
+            else:
+                annotations = types.ToolAnnotations(**annotations)
+
             # Create the MCP tool definition
-            tool = types.Tool(name=operation_id, description=tool_description, inputSchema=input_schema)
+            tool = types.Tool(
+                name=operation_id,
+                description=tool_description,
+                inputSchema=input_schema,
+                annotations=annotations,
+            )
 
             tools.append(tool)
 
