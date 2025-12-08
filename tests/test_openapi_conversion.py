@@ -34,6 +34,22 @@ def test_simple_app_conversion(simple_fastapi_app: FastAPI):
         assert tool.description is not None
         assert tool.inputSchema is not None
 
+    # Verify annotations for list_items and get_item
+    list_items_tool = next(t for t in tools if t.name == "list_items")
+    assert list_items_tool.annotations is not None
+    assert list_items_tool.annotations.readOnlyHint is True
+    assert list_items_tool.annotations.openWorldHint is False
+
+    get_item_tool = next(t for t in tools if t.name == "get_item")
+    assert get_item_tool.annotations is not None
+    assert get_item_tool.annotations.readOnlyHint is True
+    assert get_item_tool.annotations.openWorldHint is False
+
+    # Verify no annotations for other operations
+    for tool in tools:
+        if tool.name not in ["list_items", "get_item"]:
+            assert tool.annotations is None
+
 
 def test_complex_app_conversion(complex_fastapi_app: FastAPI):
     openapi_schema = get_openapi(
@@ -58,6 +74,10 @@ def test_complex_app_conversion(complex_fastapi_app: FastAPI):
         assert tool.name in expected_operations
         assert tool.description is not None
         assert tool.inputSchema is not None
+
+    # Verify no annotations in complex_fastapi_app
+    for tool in tools:
+        assert tool.annotations is None
 
 
 def test_describe_full_response_schema(simple_fastapi_app: FastAPI):
@@ -422,3 +442,36 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     if "items" in properties:
         item_props = properties["items"]["items"]["properties"]
         assert "total" in item_props
+
+
+def test_annotations_with_unknown_keys(simple_fastapi_app: FastAPI):
+    """
+    Test that unknown keys in x-mcp-annotations are handled gracefully.
+    The MCP ToolAnnotations model accepts extra keys for forward compatibility.
+    """
+    openapi_schema = get_openapi(
+        title=simple_fastapi_app.title,
+        version=simple_fastapi_app.version,
+        openapi_version=simple_fastapi_app.openapi_version,
+        description=simple_fastapi_app.description,
+        routes=simple_fastapi_app.routes,
+    )
+
+    # Add an unknown key to the annotations of list_items
+    list_items_path = openapi_schema["paths"]["/items/"]["get"]
+    list_items_path["x-mcp-annotations"]["unknownKey"] = "test_value"
+    list_items_path["x-mcp-annotations"]["anotherUnknown"] = 123
+
+    # This should not raise an error
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+
+    list_items_tool = next(t for t in tools if t.name == "list_items")
+    assert list_items_tool.annotations is not None
+    assert list_items_tool.annotations.readOnlyHint is True
+    assert list_items_tool.annotations.openWorldHint is False
+
+    # Unknown keys should be preserved in the model's extra data
+    assert hasattr(list_items_tool.annotations, "unknownKey")
+    assert list_items_tool.annotations.unknownKey == "test_value"
+    assert hasattr(list_items_tool.annotations, "anotherUnknown")
+    assert list_items_tool.annotations.anotherUnknown == 123
