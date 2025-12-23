@@ -48,6 +48,20 @@ def convert_openapi_to_mcp_tools(
 
             # Get operation metadata
             operation_id = operation.get("operationId")
+            metadata = operation.get("_meta")
+            annotations = operation.get("annotations")
+            if not metadata:
+                metadata = {
+                    'openai/toolInvocation/invoking': 'Buscando',
+                    'openai/toolInvocation/invoked': 'Revisado',
+                    'openai/widgetAccessible': False,
+                }
+            if not annotations:
+                annotations = {
+                    'destructiveHint': False,
+                    'openWorldHint': False,
+                    'readOnlyHint': True,
+                }
             if not operation_id:
                 logger.warning(f"Skipping operation with no operationId: {operation}")
                 continue
@@ -260,7 +274,8 @@ def convert_openapi_to_mcp_tools(
                 input_schema["required"] = required_props
 
             # Create the MCP tool definition
-            tool = types.Tool(name=operation_id, description=tool_description, inputSchema=input_schema)
+            tool = types.Tool(name=operation_id, description=tool_description, inputSchema=input_schema,
+                              _meta = metadata, annotations=annotations)
 
             tools.append(tool)
 
