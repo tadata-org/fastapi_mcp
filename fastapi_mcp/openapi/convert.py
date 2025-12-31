@@ -259,8 +259,21 @@ def convert_openapi_to_mcp_tools(
             if required_props:
                 input_schema["required"] = required_props
 
-            # Create the MCP tool definition
-            tool = types.Tool(name=operation_id, description=tool_description, inputSchema=input_schema)
+            # Create the MCP tool definition with annotations based on HTTP method
+            annotations = types.ToolAnnotations(
+                title=operation_id,
+                readOnlyHint=(method == "get"),
+                destructiveHint=(method == "delete"),  # Only DELETE destroys data
+                idempotentHint=(method in ("get", "put", "delete")),  # GET, PUT, DELETE are idempotent
+                openWorldHint=True,  # All generated tools call external APIs
+            )
+
+            tool = types.Tool(
+                name=operation_id,
+                description=tool_description,
+                inputSchema=input_schema,
+                annotations=annotations,
+            )
 
             tools.append(tool)
 
