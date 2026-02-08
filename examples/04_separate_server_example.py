@@ -29,6 +29,8 @@ mcp.mount_http(mcp_app)
 # It still works 🚀
 # Your original API is **not exposed**, only via the MCP server.
 if __name__ == "__main__":
+    import os
     import uvicorn
 
-    uvicorn.run(mcp_app, host="0.0.0.0", port=8000)
+    # Set HOST=0.0.0.0 to expose on your network.
+    uvicorn.run(mcp_app, host=os.getenv("HOST", "127.0.0.1"), port=8000)

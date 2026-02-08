@@ -1,5 +1,5 @@
-from uuid import UUID
 import logging
+from uuid import UUID
 from typing import Union
 
 from anyio.streams.memory import MemoryObjectSendStream
@@ -13,8 +13,36 @@ from mcp.types import JSONRPCMessage, JSONRPCError, ErrorData
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_MAX_BODY_BYTES = 1_000_000
+
 
 class FastApiSseTransport(SseServerTransport):
+    def __init__(self, endpoint: str, max_body_bytes: int = DEFAULT_MAX_BODY_BYTES):
+        super().__init__(endpoint)
+
+        max_body_bytes_int = int(max_body_bytes)
+        if max_body_bytes_int <= 0:
+            raise ValueError("max_body_bytes must be positive")
+
+        self._max_body_bytes = max_body_bytes_int
+
+    async def _read_body_with_limit(self, request: Request) -> bytes:
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                if int(content_length) > self._max_body_bytes:
+                    raise HTTPException(status_code=413, detail="Payload too large")
+            except ValueError:
+                # Ignore invalid Content-Length and fall back to streaming limit.
+                pass
+
+        out = bytearray()
+        async for chunk in request.stream():
+            out.extend(chunk)
+            if len(out) > self._max_body_bytes:
+                raise HTTPException(status_code=413, detail="Payload too large")
+        return bytes(out)
+
     async def handle_fastapi_post_message(self, request: Request) -> Response:
         """
         A reimplementation of the handle_post_message method of SseServerTransport
@@ -53,8 +81,8 @@ class FastApiSseTransport(SseServerTransport):
             logger.warning(f"Could not find session for ID: {session_id}")
             raise HTTPException(status_code=404, detail="Could not find session")
 
-        body = await request.body()
-        logger.debug(f"Received JSON: {body.decode()}")
+        body = await self._read_body_with_limit(request)
+        logger.debug(f"Received JSON: {body.decode(errors='replace')}")
 
         try:
             message = JSONRPCMessage.model_validate_json(body)

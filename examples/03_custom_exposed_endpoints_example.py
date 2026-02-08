@@ -60,6 +60,7 @@ exclude_tags_mcp.mount_http(mount_path="/exclude-tags-mcp")
 combined_include_mcp.mount_http(mount_path="/combined-include-mcp")
 
 if __name__ == "__main__":
+    import os
     import uvicorn
 
     print("Server is running with multiple MCP endpoints:")
@@ -68,4 +69,5 @@ if __name__ == "__main__":
     print(" - /include-tags-mcp: Only operations with the 'items' tag")
     print(" - /exclude-tags-mcp: All operations except those with the 'search' tag")
     print(" - /combined-include-mcp: Operations with 'search' tag or delete_item operation")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Set HOST=0.0.0.0 to expose on your network.
+    uvicorn.run(app, host=os.getenv("HOST", "127.0.0.1"), port=8000)

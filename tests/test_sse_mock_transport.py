@@ -11,6 +11,10 @@ from fastapi_mcp.transport.sse import FastApiSseTransport
 from mcp.types import JSONRPCMessage, JSONRPCError
 
 
+async def _bytes_stream(data: bytes):
+    yield data
+
+
 @pytest.fixture
 def mock_transport() -> FastApiSseTransport:
     # Initialize transport with a mock endpoint
@@ -88,7 +92,8 @@ async def test_handle_post_message_validation_error(
     # Create a mock request with valid session_id but invalid body
     mock_request = MagicMock(spec=Request)
     mock_request.query_params = {"session_id": valid_session_id.hex}
-    mock_request.body = AsyncMock(return_value=b'{"invalid": "json"}')
+    mock_request.headers = {}
+    mock_request.stream = lambda: _bytes_stream(b'{"invalid": "json"}')
 
     # Mock BackgroundTasks
     with patch("fastapi_mcp.transport.sse.BackgroundTasks") as MockBackgroundTasks:
@@ -119,7 +124,8 @@ async def test_handle_post_message_general_exception(
     # Instead of mocking the body method to raise an exception,
     # we'll patch the body method to return a normal value and then
     # patch JSONRPCMessage.model_validate_json to raise the exception
-    mock_request.body = AsyncMock(return_value=b'{"jsonrpc": "2.0", "method": "test", "id": "1"}')
+    mock_request.headers = {}
+    mock_request.stream = lambda: _bytes_stream(b'{"jsonrpc": "2.0", "method": "test", "id": "1"}')
 
     # Mock the model_validate_json method to raise an Exception
     with patch("mcp.types.JSONRPCMessage.model_validate_json", side_effect=Exception("Test exception")):
@@ -129,6 +135,22 @@ async def test_handle_post_message_general_exception(
 
         assert excinfo.value.status_code == 400
         assert "Invalid request body" in excinfo.value.detail
+
+
+@pytest.mark.anyio
+async def test_handle_post_message_payload_too_large(valid_session_id: UUID, mock_writer: AsyncMock) -> None:
+    transport = FastApiSseTransport("/messages", max_body_bytes=10)
+    transport._read_stream_writers = {valid_session_id: mock_writer}
+
+    mock_request = MagicMock(spec=Request)
+    mock_request.query_params = {"session_id": valid_session_id.hex}
+    mock_request.headers = {}
+    mock_request.stream = lambda: _bytes_stream(b"x" * 11)
+
+    with pytest.raises(HTTPException) as excinfo:
+        await transport.handle_fastapi_post_message(mock_request)
+
+    assert excinfo.value.status_code == 413
 
 
 @pytest.mark.anyio
