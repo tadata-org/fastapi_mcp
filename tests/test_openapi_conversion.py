@@ -176,12 +176,14 @@ def test_parameter_handling(complex_fastapi_app: FastAPI):
     assert "product_id" not in properties  # This is from get_product, not list_products
 
     assert "category" in properties
-    assert properties["category"].get("type") == "string"  # Enum converted to string
+    assert "anyOf" in properties["category"]  # Nullable enum preserved as anyOf
+    assert "type" not in properties["category"]  # No top-level type for nullable schemas
     assert "description" in properties["category"]
     assert "Filter by product category" in properties["category"]["description"]
 
     assert "min_price" in properties
-    assert properties["min_price"].get("type") == "number"
+    assert "anyOf" in properties["min_price"]  # Nullable number preserved as anyOf
+    assert "type" not in properties["min_price"]  # No top-level type for nullable schemas
     assert "description" in properties["min_price"]
     assert "Minimum price filter" in properties["min_price"]["description"]
     if "minimum" in properties["min_price"]:
@@ -204,7 +206,7 @@ def test_parameter_handling(complex_fastapi_app: FastAPI):
         assert properties["size"]["maximum"] <= 100  # le=100 in Query param
 
     assert "tag" in properties
-    assert properties["tag"].get("type") == "array"
+    assert "anyOf" in properties["tag"]  # Nullable array preserved as anyOf
 
     required = list_products_tool.inputSchema.get("required", [])
     assert "page" not in required  # Has default value
@@ -416,9 +418,82 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     assert properties["customer_id"]["title"] == "customer_id"
 
     assert "notes" in properties
-    assert "type" in properties["notes"]
-    assert properties["notes"]["type"] in ["string", "object"]  # Default should be either string or object
+    # notes is nullable (anyOf with null), so it should have anyOf or type
+    assert "type" in properties["notes"] or "anyOf" in properties["notes"]
 
     if "items" in properties:
         item_props = properties["items"]["items"]["properties"]
         assert "total" in item_props
+
+
+def test_nullable_anyof_schema_preserved():
+    """Test that anyOf with null type is preserved without injecting a type field."""
+    openapi_schema = {
+        "openapi": "3.1.0",
+        "info": {"title": "Test", "version": "0.1.0"},
+        "paths": {
+            "/items": {
+                "post": {
+                    "operationId": "create_item",
+                    "summary": "Create an item",
+                    "requestBody": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"},
+                                        "description": {
+                                            "anyOf": [{"type": "string"}, {"type": "null"}],
+                                            "title": "Description",
+                                        },
+                                    },
+                                    "required": ["name"],
+                                }
+                            }
+                        },
+                        "required": True,
+                    },
+                    "responses": {"200": {"description": "OK"}},
+                }
+            },
+            "/items/{item_id}": {
+                "get": {
+                    "operationId": "get_item",
+                    "summary": "Get an item",
+                    "parameters": [
+                        {
+                            "name": "item_id",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"},
+                        },
+                        {
+                            "name": "fields",
+                            "in": "query",
+                            "required": False,
+                            "schema": {
+                                "anyOf": [{"type": "string"}, {"type": "null"}],
+                                "title": "Fields",
+                            },
+                        },
+                    ],
+                    "responses": {"200": {"description": "OK"}},
+                }
+            },
+        },
+    }
+
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+
+    # Check body parameter with anyOf
+    create_tool = next(t for t in tools if t.name == "create_item")
+    desc_prop = create_tool.inputSchema["properties"]["description"]
+    assert "anyOf" in desc_prop
+    assert "type" not in desc_prop, "type field should not be injected when anyOf is present"
+
+    # Check query parameter with anyOf
+    get_tool = next(t for t in tools if t.name == "get_item")
+    fields_prop = get_tool.inputSchema["properties"]["fields"]
+    assert "anyOf" in fields_prop
+    assert "type" not in fields_prop, "type field should not be injected when anyOf is present"
