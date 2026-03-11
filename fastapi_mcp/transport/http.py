@@ -91,32 +91,27 @@ class FastApiHttpSessionManager:
         would be rejected. This method adds text/event-stream to the Accept header
         when it is missing, so standard HTTP JSON-RPC clients work out of the box.
         """
-        headers: List[Tuple[bytes, bytes]] = list(scope.get("headers", []))
+        raw_headers: List[Tuple[bytes, bytes]] = scope.get("headers", [])
         accept_idx = None
-        has_sse = False
 
-        for i, (name, value) in enumerate(headers):
+        for i, (name, value) in enumerate(raw_headers):
             if name.lower() == b"accept":
-                accept_idx = i
                 accept_types = [t.strip() for t in value.split(b",")]
-                has_sse = any(t.startswith(ACCEPT_SSE) for t in accept_types)
+                if any(t.startswith(ACCEPT_SSE) for t in accept_types):
+                    return scope
+                accept_idx = i
                 break
 
-        if has_sse:
-            return scope
-
         # Build a new scope with the updated Accept header (immutable approach)
-        new_scope = dict(scope)
+        new_headers = list(raw_headers)
         if accept_idx is not None:
-            new_headers = list(headers)
             existing_value = new_headers[accept_idx][1]
             new_headers[accept_idx] = (b"accept", existing_value + b", " + ACCEPT_SSE)
-            new_scope["headers"] = new_headers
         else:
-            new_headers = list(headers)
             new_headers.append((b"accept", ACCEPT_JSON + b", " + ACCEPT_SSE))
-            new_scope["headers"] = new_headers
 
+        new_scope = dict(scope)
+        new_scope["headers"] = new_headers
         return new_scope
 
     async def handle_fastapi_request(self, request: Request) -> Response:
