@@ -581,3 +581,27 @@ def test_filtering_with_empty_tags_array():
     exclude_tags_mcp = FastApiMCP(app, exclude_tags=["items"])
     assert len(exclude_tags_mcp.tools) == 1
     assert {tool.name for tool in exclude_tags_mcp.tools} == {"empty_tags"}
+
+
+def test_tool_names_are_shortened_to_fit_client_limits():
+    """Test that tool names are shortened when combined server + tool names exceed common client limits."""
+    app = FastAPI(title="tool-shortening-test")
+
+    long_operation_id = "operation_name_that_is_far_too_long_for_cursor_tool_limits"
+    custom_server_name = "custom-server-name-with-limit"
+
+    @app.get("/items/", operation_id=long_operation_id)
+    async def list_items():
+        return [{"id": 1}]
+
+    mcp_server = FastApiMCP(app, name=custom_server_name)
+
+    assert len(mcp_server.tools) == 1
+
+    tool_name = mcp_server.tools[0].name
+    max_tool_name_length = 60 - len(custom_server_name)
+
+    assert tool_name != long_operation_id
+    assert len(tool_name) <= max_tool_name_length
+    assert tool_name in mcp_server.operation_map
+    assert long_operation_id not in mcp_server.operation_map

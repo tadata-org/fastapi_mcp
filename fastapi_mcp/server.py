@@ -1,3 +1,4 @@
+import hashlib
 import json
 import httpx
 from typing import Dict, Optional, Any, List, Union, Literal, Sequence
@@ -23,6 +24,8 @@ class FastApiMCP:
     """
     Create an MCP server from a FastAPI app.
     """
+
+    _MAX_COMBINED_TOOL_NAME_LENGTH = 60
 
     def __init__(
         self,
@@ -140,6 +143,7 @@ class FastApiMCP:
 
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
+        self.tools = self._shorten_tool_names_for_client_limits(self.tools)
 
         mcp_server: Server = Server(self.name, self.description)
 
@@ -184,6 +188,53 @@ class FastApiMCP:
             )
 
         self.server = mcp_server
+
+    @classmethod
+    def _build_short_tool_name(cls, tool_name: str, max_length: int) -> str:
+        if len(tool_name) <= max_length:
+            return tool_name
+
+        name_hash = hashlib.sha1(tool_name.encode("utf-8")).hexdigest()[:8]
+        suffix = f"-{name_hash}"
+
+        if max_length <= len(suffix):
+            return name_hash[:max_length]
+
+        return f"{tool_name[: max_length - len(suffix)]}{suffix}"
+
+    def _shorten_tool_names_for_client_limits(self, tools: List[types.Tool]) -> List[types.Tool]:
+        max_tool_name_length = self._MAX_COMBINED_TOOL_NAME_LENGTH - len(self.name)
+
+        if max_tool_name_length < 1:
+            logger.warning(
+                "Server name '%s' is too long to satisfy the %s-character combined client tool limit",
+                self.name,
+                self._MAX_COMBINED_TOOL_NAME_LENGTH,
+            )
+            return tools
+
+        shortened_tools: List[types.Tool] = []
+        shortened_operation_map: Dict[str, Dict[str, Any]] = {}
+        used_names: set[str] = set()
+
+        for tool in tools:
+            original_name = tool.name
+            shortened_name = self._build_short_tool_name(original_name, max_tool_name_length)
+
+            if shortened_name in used_names:
+                collision_index = 1
+                while shortened_name in used_names:
+                    collision_suffix = f"-{collision_index}"
+                    available_length = max(1, max_tool_name_length - len(collision_suffix))
+                    shortened_name = f"{self._build_short_tool_name(original_name, available_length)}{collision_suffix}"
+                    collision_index += 1
+
+            used_names.add(shortened_name)
+            shortened_tools.append(tool.model_copy(update={"name": shortened_name}))
+            shortened_operation_map[shortened_name] = self.operation_map[original_name]
+
+        self.operation_map = shortened_operation_map
+        return shortened_tools
 
     def _register_mcp_connection_endpoint_sse(
         self,
