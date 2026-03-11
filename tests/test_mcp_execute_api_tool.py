@@ -190,3 +190,44 @@ async def test_execute_api_tool_with_non_ascii_chars(simple_fastapi_app: FastAPI
         params={},
         headers={}
     )
+
+
+@pytest.mark.asyncio
+async def test_execute_api_tool_with_shortened_tool_name():
+    """Test executing a tool after its name is shortened to satisfy client limits."""
+    app = FastAPI(title="tool-shortening-test")
+    custom_server_name = "custom-server-name-with-limit"
+    long_operation_id = "operation_name_that_is_far_too_long_for_cursor_tool_limits"
+
+    @app.get("/items/{item_id}", operation_id=long_operation_id)
+    async def get_item(item_id: int):
+        return {"id": item_id}
+
+    mcp = FastApiMCP(app, name=custom_server_name)
+
+    tool_name = mcp.tools[0].name
+    assert tool_name != long_operation_id
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"id": 1}
+    mock_response.status_code = 200
+    mock_response.text = '{"id": 1}'
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+
+    with patch.object(mcp, "_http_client", mock_client):
+        result = await mcp._execute_api_tool(
+            client=mock_client,
+            tool_name=tool_name,
+            arguments={"item_id": 1},
+            operation_map=mcp.operation_map,
+        )
+
+    assert len(result) == 1
+    assert isinstance(result[0], TextContent)
+    mock_client.get.assert_called_once_with(
+        "/items/1",
+        params={},
+        headers={},
+    )
