@@ -16,6 +16,7 @@ def test_default_configuration(simple_fastapi_app: FastAPI):
     # Check default options
     assert mcp_server._describe_all_responses is False
     assert mcp_server._describe_full_response_schema is False
+    assert mcp_server._http_client.timeout.connect == 10.0
 
 
 def test_custom_configuration(simple_fastapi_app: FastAPI):

@@ -6,7 +6,9 @@ icon: question
 
 ## Usage
 ### How do I configure HTTP request timeouts?
-By default, HTTP requests timeout after 5 seconds. If you have API endpoints that take longer to respond, you can configure a custom timeout by injecting your own httpx client. 
+By default, HTTP requests timeout after 10 seconds. If you have API endpoints that take longer to respond, you can configure a custom timeout by injecting your own `httpx.AsyncClient`.
+
+If you replace the default client, keep the in-process `ASGITransport` and `base_url` so the MCP server still routes tool calls back into your FastAPI app.
 
 For a working example, see [Configure HTTP Timeout Example](https://github.com/tadata-org/fastapi_mcp/blob/main/examples/07_configure_http_timeout_example.py).
 
