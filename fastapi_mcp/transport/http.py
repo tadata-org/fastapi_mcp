@@ -1,10 +1,14 @@
 import logging
 import asyncio
+from typing import Any, List, MutableMapping, Tuple
 
 from fastapi import Request, Response, HTTPException
 from mcp.server.lowlevel.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager, EventStore
 from mcp.server.transport_security import TransportSecuritySettings
+
+ACCEPT_JSON = b"application/json"
+ACCEPT_SSE = b"text/event-stream"
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +81,39 @@ class FastApiHttpSessionManager:
             # Give the session manager a moment to initialize
             await asyncio.sleep(0.1)
 
+    def _ensure_accept_headers(self, scope: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
+        """
+        Ensure the ASGI scope's Accept header includes text/event-stream.
+
+        The upstream MCP StreamableHTTPSessionManager requires both application/json
+        and text/event-stream in the Accept header, even when json_response=True.
+        Clients that only send Accept: application/json (e.g., Google Gemini CLI)
+        would be rejected. This method adds text/event-stream to the Accept header
+        when it is missing, so standard HTTP JSON-RPC clients work out of the box.
+        """
+        raw_headers: List[Tuple[bytes, bytes]] = scope.get("headers", [])
+        accept_idx = None
+
+        for i, (name, value) in enumerate(raw_headers):
+            if name.lower() == b"accept":
+                accept_types = [t.strip() for t in value.split(b",")]
+                if any(t.startswith(ACCEPT_SSE) for t in accept_types):
+                    return scope
+                accept_idx = i
+                break
+
+        # Build a new scope with the updated Accept header (immutable approach)
+        new_headers = list(raw_headers)
+        if accept_idx is not None:
+            existing_value = new_headers[accept_idx][1]
+            new_headers[accept_idx] = (b"accept", existing_value + b", " + ACCEPT_SSE)
+        else:
+            new_headers.append((b"accept", ACCEPT_JSON + b", " + ACCEPT_SSE))
+
+        new_scope = dict(scope)
+        new_scope["headers"] = new_headers
+        return new_scope
+
     async def handle_fastapi_request(self, request: Request) -> Response:
         """
         Handle a FastAPI request by delegating to the session manager.
@@ -92,13 +129,18 @@ class FastApiHttpSessionManager:
 
         logger.debug(f"Handling FastAPI request: {request.method} {request.url.path}")
 
+        # Ensure Accept header includes text/event-stream for upstream compatibility.
+        # The upstream MCP library requires both application/json and text/event-stream,
+        # but standard HTTP JSON-RPC clients only send application/json.
+        scope = self._ensure_accept_headers(request.scope)
+
         # Capture the response from the session manager
         response_started = False
         response_status = 200
-        response_headers = []
+        response_headers: List[Tuple[bytes, bytes]] = []
         response_body = b""
 
-        async def send_callback(message):
+        async def send_callback(message: MutableMapping[str, Any]) -> None:
             nonlocal response_started, response_status, response_headers, response_body
 
             if message["type"] == "http.response.start":
@@ -110,7 +152,7 @@ class FastApiHttpSessionManager:
 
         try:
             # Delegate to the session manager's handle_request method
-            await self._session_manager.handle_request(request.scope, request.receive, send_callback)
+            await self._session_manager.handle_request(scope, request.receive, send_callback)
 
             # Convert the captured ASGI response to a FastAPI Response
             headers_dict = {name.decode(): value.decode() for name, value in response_headers}

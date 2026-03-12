@@ -476,3 +476,209 @@ async def test_http_notification_handling(http_client: httpx.AsyncClient, server
     assert response.status_code == 202
     # Notifications should return empty body
     assert response.content == b"" or response.text == "null"
+
+
+@pytest.mark.anyio
+async def test_http_accept_json_only(http_client: httpx.AsyncClient, server: str) -> None:
+    """Test that HTTP transport accepts requests with only Accept: application/json.
+
+    Standard HTTP JSON-RPC clients (e.g., Google Gemini CLI) only send
+    Accept: application/json. The HTTP transport should handle this
+    without returning a 406 Not Acceptable error.
+
+    See: https://github.com/tadata-org/fastapi_mcp/issues/233
+    """
+    mcp_path = "/mcp"
+
+    # Send request with only application/json Accept header (no text/event-stream)
+    response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+                "protocolVersion": types.LATEST_PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "1.0.0"},
+            },
+        },
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 200, (
+        f"Expected 200 but got {response.status_code}. "
+        f"HTTP transport should accept requests with only Accept: application/json. "
+        f"Response: {response.text}"
+    )
+
+    result = response.json()
+    assert result["jsonrpc"] == "2.0"
+    assert result["id"] == 1
+    assert "result" in result
+    assert result["result"]["serverInfo"]["name"] == SERVER_NAME
+
+
+@pytest.mark.anyio
+async def test_http_accept_json_only_then_list_tools(http_client: httpx.AsyncClient, server: str) -> None:
+    """Test a full session (initialize + list tools) using only Accept: application/json.
+
+    Verifies that clients sending only application/json can complete a full
+    MCP session lifecycle without hitting 406 errors.
+    """
+    mcp_path = "/mcp"
+
+    # Initialize with only application/json
+    init_response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+                "protocolVersion": types.LATEST_PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "1.0.0"},
+            },
+        },
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+    )
+    assert init_response.status_code == 200
+
+    session_id = init_response.headers.get("mcp-session-id")
+    assert session_id is not None
+
+    # Send initialized notification with only application/json
+    notif_response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+        },
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "mcp-session-id": session_id,
+        },
+    )
+    assert notif_response.status_code == 202
+
+    # List tools with only application/json
+    tools_response = await http_client.post(
+        mcp_path,
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/list",
+            "id": 2,
+        },
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "mcp-session-id": session_id,
+        },
+    )
+    assert tools_response.status_code == 200
+    result = tools_response.json()
+    assert "result" in result
+    assert "tools" in result["result"]
+    assert len(result["result"]["tools"]) > 0
+
+
+class TestEnsureAcceptHeaders:
+    """Unit tests for FastApiHttpSessionManager._ensure_accept_headers."""
+
+    def _make_manager(self):  # type: ignore[no-untyped-def]
+        from fastapi_mcp.transport.http import FastApiHttpSessionManager
+        from unittest.mock import MagicMock
+
+        mock_server = MagicMock()
+        return FastApiHttpSessionManager(mcp_server=mock_server)
+
+    def test_already_has_sse_header(self) -> None:
+        """When text/event-stream is already present, scope is returned unchanged."""
+        manager = self._make_manager()
+        scope = {
+            "headers": [
+                (b"accept", b"application/json, text/event-stream"),
+                (b"content-type", b"application/json"),
+            ]
+        }
+        result = manager._ensure_accept_headers(scope)
+        assert result is scope  # Same object, no copy needed
+
+    def test_json_only_gets_sse_appended(self) -> None:
+        """When only application/json is present, text/event-stream is appended."""
+        manager = self._make_manager()
+        scope = {
+            "headers": [
+                (b"accept", b"application/json"),
+                (b"content-type", b"application/json"),
+            ]
+        }
+        result = manager._ensure_accept_headers(scope)
+        assert result is not scope  # New scope created
+
+        accept_header = None
+        for name, value in result["headers"]:
+            if name == b"accept":
+                accept_header = value
+                break
+
+        assert accept_header is not None
+        assert b"application/json" in accept_header
+        assert b"text/event-stream" in accept_header
+
+    def test_no_accept_header_adds_both(self) -> None:
+        """When no Accept header exists, both types are added."""
+        manager = self._make_manager()
+        scope = {
+            "headers": [
+                (b"content-type", b"application/json"),
+            ]
+        }
+        result = manager._ensure_accept_headers(scope)
+        assert result is not scope
+
+        accept_header = None
+        for name, value in result["headers"]:
+            if name == b"accept":
+                accept_header = value
+                break
+
+        assert accept_header is not None
+        assert b"application/json" in accept_header
+        assert b"text/event-stream" in accept_header
+
+    def test_wildcard_accept_gets_sse_appended(self) -> None:
+        """When Accept is */* (no explicit text/event-stream), SSE is appended."""
+        manager = self._make_manager()
+        scope = {
+            "headers": [
+                (b"accept", b"*/*"),
+            ]
+        }
+        result = manager._ensure_accept_headers(scope)
+        assert result is not scope
+
+        accept_header = None
+        for name, value in result["headers"]:
+            if name == b"accept":
+                accept_header = value
+                break
+
+        assert accept_header is not None
+        assert b"text/event-stream" in accept_header
+
+    def test_original_scope_not_mutated(self) -> None:
+        """Ensure the original scope's headers list is not mutated."""
+        manager = self._make_manager()
+        original_headers = [
+            (b"accept", b"application/json"),
+            (b"content-type", b"application/json"),
+        ]
+        scope = {"headers": original_headers}
+        manager._ensure_accept_headers(scope)
+
+        # Original headers should be untouched
+        assert len(original_headers) == 2
+        assert original_headers[0] == (b"accept", b"application/json")
