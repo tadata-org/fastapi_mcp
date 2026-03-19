@@ -44,6 +44,24 @@
 - **ASGI transport** - Uses FastAPI's ASGI interface directly for efficient communication
 
 
+### Customizing the HTTP Client
+
+By default, FastAPI-MCP creates an `httpx.AsyncClient` with defaults:
+
+- `transport`: ASGITransport bound to the app
+- `base_url`: internal base URL
+- `timeout`: 10 seconds
+
+If you only need to override one parameter (e.g. `timeout`), pass `http_client_args`:
+
+```python
+client = MyClass(
+    http_client_args={
+        "timeout": 30.0,
+        "headers": {"Authorization": "Bearer TOKEN"}
+    }
+)
+
 ## Hosted Solution
 
 If you prefer a managed hosted solution check out [tadata.com](https://tadata.com).

@@ -1,0 +1,100 @@
+diff --git a/fastapi_mcp/client.py b/fastapi_mcp/client.py
+index abc123..def456 100644
+--- a/fastapi_mcp/client.py
++++ b/fastapi_mcp/client.py
+@@ -1,6 +1,7 @@
+ import httpx
+ from typing import Optional
++from typing import Dict, Any
+ 
+ class MyClass:
+-    def __init__(self, http_client: Optional[httpx.AsyncClient] = None, ...):
+-        if self._auth_config:
+-            self._auth_config = self._auth_config.model_validate(self._auth_config)
+-
+-            http_client_args = http_client_args or {}
+-
+-            self._http_client = http_client or httpx.AsyncClient(
+-                transport=httpx.ASGITransport(app=self.fastapi, raise_app_exceptions=False),
+-                base_url=self._base_url,
+-                timeout=10.0,
+-            )
++    def __init__(
++        self,
++        http_client: Optional[httpx.AsyncClient] = None,
++        http_client_args: Optional[Dict[str, Any]] = None,
++        ...
++    ):
++        if self._auth_config:
++            self._auth_config = self._auth_config.model_validate(self._auth_config)
++
++            http_client_args = http_client_args or {}
++
++            defaults = {
++                "transport": httpx.ASGITransport(
++                    app=self.fastapi,
++                    raise_app_exceptions=False,
++                ),
++                "base_url": self._base_url,
++                "timeout": 10.0,
++            }
++
++            merged_args = {**defaults, **http_client_args}
++
++            self._http_client = http_client or httpx.AsyncClient(**merged_args)
+diff --git a/tests/test_http_client_args.py b/tests/test_http_client_args.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/tests/test_http_client_args.py
+@@ -0,0 +1,15 @@
++import httpx
++from fastapi_mcp import MyClass  # adjust if MyClass is imported differently
++
++
++def test_http_client_args_override_timeout():
++    client = MyClass(http_client_args={"timeout": 25.0})
++    assert client._http_client.timeout == 25.0
++
++
++def test_http_client_args_add_headers():
++    client = MyClass(http_client_args={"headers": {"X-Test": "123"}})
++    assert client._http_client.headers["x-test"] == "123"
+diff --git a/README.md b/README.md
+index 1234567..89abcde 100644
+--- a/README.md
++++ b/README.md
+@@
+ ## Usage
+ 
++### Customizing the HTTP Client
++
++By default, FastAPI-MCP creates an `httpx.AsyncClient` with:
++
++- `transport`: `httpx.ASGITransport` bound to the app
++- `base_url`: internal base URL
++- `timeout`: 10 seconds
++
++If you only need to override one parameter (e.g. `timeout`) or add headers, pass `http_client_args`:
++
++```python
++from fastapi_mcp import MyClass
++
++client = MyClass(
++    http_client_args={
++        "timeout": 30.0,
++        "headers": {"Authorization": "Bearer TOKEN"},
++    }
++)
++```
++
++For full control, you can pass a custom `http_client`:
++
++```python
++import httpx
++from fastapi_mcp import MyClass
++
++custom_client = httpx.AsyncClient(timeout=60.0)
++client = MyClass(http_client=custom_client)
++```
++
