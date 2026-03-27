@@ -16,6 +16,56 @@ def get_single_param_type_from_schema(param_schema: Dict[str, Any]) -> str:
     return param_schema.get("type", "string")
 
 
+def flatten_nullable_anyof(param_schema: Dict[str, Any]) -> None:
+    """
+    Flatten anyOf nullable patterns into a single schema with full type information.
+
+    When OpenAPI represents optional typed parameters (e.g. Optional[List[int]]),
+    it produces an anyOf with the typed schema and a null variant:
+
+        {"anyOf": [{"type": "array", "items": {"type": "integer"}}, {"type": "null"}]}
+
+    After ``get_single_param_type_from_schema`` injects ``type`` at the top level,
+    the ``items`` (or ``properties``, etc.) remain buried inside the ``anyOf`` variant.
+    LLM clients that validate against JSON Schema reject this because the top-level
+    ``type: "array"`` lacks an ``items`` definition.
+
+    This function hoists the non-null variant's fields (``items``, ``properties``,
+    ``required``, ``additionalProperties``, ``enum``, ``format``, ``minItems``,
+    ``maxItems``, ``minimum``, ``maximum``, etc.) to the top level and removes the
+    ``anyOf`` key, producing a flat, valid schema.
+
+    Only applies when ``anyOf`` is a simple nullable pattern (exactly one non-null
+    type plus a null variant). Complex unions with multiple non-null types are left
+    unchanged.
+
+    Mutates ``param_schema`` in place.
+    """
+    if "anyOf" not in param_schema:
+        return
+
+    variants = param_schema["anyOf"]
+    if not isinstance(variants, list):
+        return
+
+    non_null = [v for v in variants if isinstance(v, dict) and v.get("type") != "null"]
+    null_variants = [v for v in variants if isinstance(v, dict) and v.get("type") == "null"]
+
+    # Only flatten simple nullable patterns: one non-null type + null
+    if len(non_null) != 1 or len(null_variants) == 0:
+        return
+
+    source = non_null[0]
+
+    # Hoist all fields from the non-null variant that aren't already at the top level,
+    # except "type" which is already set by get_single_param_type_from_schema
+    for key, value in source.items():
+        if key != "type" and key not in param_schema:
+            param_schema[key] = value
+
+    del param_schema["anyOf"]
+
+
 def resolve_schema_references(schema_part: Dict[str, Any], reference_schema: Dict[str, Any]) -> Dict[str, Any]:
     """
     Resolve schema references in OpenAPI schemas.

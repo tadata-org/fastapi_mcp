@@ -6,6 +6,7 @@ import mcp.types as types
 
 from .utils import (
     clean_schema_for_display,
+    flatten_nullable_anyof,
     generate_example_from_schema,
     resolve_schema_references,
     get_single_param_type_from_schema,
@@ -227,6 +228,10 @@ def convert_openapi_to_mcp_tools(
                 if "type" not in properties[param_name]:
                     properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
 
+                # Flatten nullable anyOf patterns so that type-specific fields
+                # (e.g. "items" for arrays) are hoisted to the top level
+                flatten_nullable_anyof(properties[param_name])
+
                 if "default" in param_schema:
                     properties[param_name]["default"] = param_schema["default"]
 
@@ -246,6 +251,10 @@ def convert_openapi_to_mcp_tools(
 
                 if "type" not in properties[param_name]:
                     properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
+
+                # Flatten nullable anyOf patterns so that type-specific fields
+                # (e.g. "items" for arrays) are hoisted to the top level
+                flatten_nullable_anyof(properties[param_name])
 
                 if "default" in param_schema:
                     properties[param_name]["default"] = param_schema["default"]
