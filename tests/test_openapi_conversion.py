@@ -5,6 +5,7 @@ import mcp.types as types
 from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
 from fastapi_mcp.openapi.utils import (
     clean_schema_for_display,
+    flatten_nullable_anyof,
     generate_example_from_schema,
     get_single_param_type_from_schema,
 )
@@ -422,3 +423,178 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     if "items" in properties:
         item_props = properties["items"]["items"]["properties"]
         assert "total" in item_props
+
+
+def test_flatten_nullable_anyof_hoists_array_items():
+    """Nullable anyOf with a typed array should hoist 'items' to the top level."""
+    schema = {
+        "anyOf": [
+            {"type": "array", "items": {"type": "integer"}},
+            {"type": "null"},
+        ],
+        "title": "time_values",
+        "type": "array",
+    }
+    flatten_nullable_anyof(schema)
+
+    assert "anyOf" not in schema
+    assert schema["type"] == "array"
+    assert "items" in schema
+    assert schema["items"] == {"type": "integer"}
+    assert schema["title"] == "time_values"
+
+
+def test_flatten_nullable_anyof_preserves_non_nullable():
+    """Schemas without anyOf should be left unchanged."""
+    schema = {"type": "array", "items": {"type": "string"}, "title": "tags"}
+    original = schema.copy()
+    flatten_nullable_anyof(schema)
+    assert schema == original
+
+
+def test_flatten_nullable_anyof_skips_multi_type_unions():
+    """Complex unions with multiple non-null types should be left unchanged."""
+    schema = {
+        "anyOf": [
+            {"type": "string"},
+            {"type": "integer"},
+            {"type": "null"},
+        ],
+        "title": "mixed",
+        "type": "string",
+    }
+    flatten_nullable_anyof(schema)
+
+    # Should NOT flatten because there are two non-null types
+    assert "anyOf" in schema
+
+
+def test_flatten_nullable_anyof_hoists_object_properties():
+    """Nullable anyOf with an object schema should hoist 'properties' and 'required'."""
+    schema = {
+        "anyOf": [
+            {
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                "required": ["name"],
+            },
+            {"type": "null"},
+        ],
+        "title": "config",
+        "type": "object",
+    }
+    flatten_nullable_anyof(schema)
+
+    assert "anyOf" not in schema
+    assert schema["type"] == "object"
+    assert "properties" in schema
+    assert schema["properties"] == {"name": {"type": "string"}}
+    assert schema["required"] == ["name"]
+
+
+def test_typed_array_body_params_preserve_items():
+    """
+    Optional[List[int]] body parameters should produce a schema with
+    both 'type: array' and 'items' at the top level.
+
+    Regression test for https://github.com/tadata-org/fastapi_mcp/issues/57
+    """
+    openapi_schema = {
+        "openapi": "3.1.0",
+        "info": {"title": "Test", "version": "1.0.0"},
+        "paths": {
+            "/analyze": {
+                "post": {
+                    "operationId": "analyze_data",
+                    "summary": "Analyze data",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "values": {
+                                            "anyOf": [
+                                                {"type": "array", "items": {"type": "integer"}},
+                                                {"type": "null"},
+                                            ],
+                                            "title": "Values",
+                                        },
+                                        "labels": {
+                                            "type": "array",
+                                            "items": {"type": "string"},
+                                            "title": "Labels",
+                                        },
+                                    },
+                                    "required": ["labels"],
+                                }
+                            }
+                        },
+                    },
+                    "responses": {"200": {"description": "OK"}},
+                }
+            }
+        },
+    }
+
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+    assert len(tools) == 1
+
+    props = tools[0].inputSchema["properties"]
+
+    # Required List[str] — should keep items as-is
+    assert props["labels"]["type"] == "array"
+    assert props["labels"]["items"] == {"type": "string"}
+
+    # Optional List[int] — should flatten anyOf and hoist items
+    assert props["values"]["type"] == "array"
+    assert "items" in props["values"], "items must be hoisted from anyOf to the top level"
+    assert props["values"]["items"] == {"type": "integer"}
+    assert "anyOf" not in props["values"], "anyOf should be removed after flattening"
+
+
+def test_typed_array_query_params_preserve_items():
+    """
+    Optional[List[str]] query parameters should produce a schema with
+    both 'type: array' and 'items' at the top level.
+
+    Regression test for https://github.com/tadata-org/fastapi_mcp/issues/57
+    """
+    openapi_schema = {
+        "openapi": "3.1.0",
+        "info": {"title": "Test", "version": "1.0.0"},
+        "paths": {
+            "/search": {
+                "get": {
+                    "operationId": "search_items",
+                    "summary": "Search",
+                    "parameters": [
+                        {
+                            "name": "tags",
+                            "in": "query",
+                            "required": False,
+                            "schema": {
+                                "anyOf": [
+                                    {"type": "array", "items": {"type": "string"}},
+                                    {"type": "null"},
+                                ],
+                                "title": "Tags",
+                            },
+                        }
+                    ],
+                    "responses": {"200": {"description": "OK"}},
+                }
+            }
+        },
+    }
+
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+    assert len(tools) == 1
+
+    props = tools[0].inputSchema["properties"]
+
+    assert props["tags"]["type"] == "array"
+    assert "items" in props["tags"], "items must be hoisted from anyOf to the top level"
+    assert props["tags"]["items"] == {"type": "string"}
+    assert "anyOf" not in props["tags"], "anyOf should be removed after flattening"
