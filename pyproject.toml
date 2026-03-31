@@ -27,29 +27,25 @@ classifiers = [
 keywords = ["fastapi", "openapi", "mcp", "llm", "claude", "ai", "tools", "api", "conversion", "modelcontextprotocol"]
 dependencies = [
     "fastapi>=0.100.0",
-    "typer>=0.9.0",
-    "rich>=13.0.0",
     "mcp>=1.12.0",
     "pydantic>=2.0.0",
-    "pydantic-settings>=2.5.2",
-    "uvicorn>=0.20.0",
     "httpx>=0.24.0",
-    "requests>=2.25.0",
-    "tomli>=2.2.1",
 ]
 
 [dependency-groups]
 dev = [
+    "cryptography>=44.0.2",
     "mypy>=1.15.0",
-    "ruff>=0.9.10",
-    "types-setuptools>=75.8.2.20250305",
-    "pytest>=8.3.5",
+    "pre-commit>=4.2.0",
+    "pydantic-settings>=2.5.2",
+    "pyjwt>=2.10.1",
     "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.1.1",
-    "pre-commit>=4.2.0",
-    "pyjwt>=2.10.1",
-    "cryptography>=44.0.2",
+    "pytest>=8.3.5",
+    "ruff>=0.9.10",
     "types-jsonschema>=4.25.0.20250720",
+    "types-setuptools>=75.8.2.20250305",
+    "uvicorn>=0.20.0",
 ]
 
 [project.urls]
