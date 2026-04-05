@@ -1,0 +1,25 @@
+{
+  "name": "fastapi-mcp",
+  "version": "0.1.0",
+  "description": "Expose FastAPI endpoints as MCP tools for Codex",
+  "author": {
+    "name": "tadata-org",
+    "url": "https://github.com/tadata-org/fastapi_mcp"
+  },
+  "homepage": "https://github.com/tadata-org/fastapi_mcp",
+  "repository": "https://github.com/tadata-org/fastapi_mcp",
+  "keywords": [
+    "mcp",
+    "fastapi",
+    "codex"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "FastAPI MCP",
+    "shortDescription": "Expose FastAPI endpoints as MCP tools",
+    "longDescription": "Expose your FastAPI endpoints as Model Context Protocol (MCP) tools, with auth support.",
+    "category": "Development",
+    "websiteURL": "https://github.com/tadata-org/fastapi_mcp"
+  },
+  "skills": "./skills/"
+}
