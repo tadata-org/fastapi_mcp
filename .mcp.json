@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "fastapi-mcp": {
+      "command": "uvx",
+      "args": [
+        "fastapi-mcp"
+      ]
+    }
+  }
+}
