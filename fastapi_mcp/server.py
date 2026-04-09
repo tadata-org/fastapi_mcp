@@ -330,6 +330,29 @@ class FastApiMCP:
                 """
             ),
         ] = "/mcp",
+        stateless: Annotated[
+            bool,
+            Doc(
+                """
+                Run the streamable HTTP transport in stateless mode.
+
+                In stateless mode a fresh ``StreamableHTTPServerTransport`` is created for each
+                request — no session tracking, no ``Mcp-Session-Id`` header, no resumability.
+                This is required for multi-replica deployments behind a load balancer that
+                doesn't do sticky-session routing on ``Mcp-Session-Id``, and is a good fit
+                for request/response-only MCP servers (e.g. a FastAPI app exposing REST
+                handlers as tools).
+
+                Stateful mode (the default) preserves backwards-compatible behavior: sessions
+                are tracked in the process's memory and features that rely on per-client
+                state — progress notifications, resumability via an event store, and
+                server-initiated notifications — continue to work.
+
+                See the MCP spec and the python-sdk
+                ``StreamableHTTPSessionManager`` docs for the full trade-off.
+                """
+            ),
+        ] = False,
     ) -> None:
         """
         Mount the MCP server with HTTP transport to **any** FastAPI app or APIRouter.
@@ -348,7 +371,7 @@ class FastApiMCP:
 
         assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
 
-        http_transport = FastApiHttpSessionManager(mcp_server=self.server)
+        http_transport = FastApiHttpSessionManager(mcp_server=self.server, stateless=stateless)
         dependencies = self._auth_config.dependencies if self._auth_config else None
 
         self._register_mcp_endpoints_http(router, http_transport, mount_path, dependencies)
