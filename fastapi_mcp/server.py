@@ -84,6 +84,10 @@ class FastApiMCP:
                 """
             ),
         ] = ["authorization"],
+        custom_tools: Annotated[
+            Optional[List[tuple[types.Tool, Any]]],
+            Doc("List of (Tool, handler) tuples for custom tools not derived from OpenAPI"),
+        ] = None,
     ):
         # Validate operation and tag filtering options
         if include_operations is not None and exclude_operations is not None:
@@ -95,6 +99,7 @@ class FastApiMCP:
         self.operation_map: Dict[str, Dict[str, Any]]
         self.tools: List[types.Tool]
         self.server: Server
+        self._custom_handlers: Dict[str, Any] = {}
 
         self.fastapi = fastapi
         self.name = name or self.fastapi.title or "FastAPI MCP"
@@ -122,6 +127,29 @@ class FastApiMCP:
         self._http_transport: FastApiHttpSessionManager | None = None  # Store reference to HTTP transport for cleanup
 
         self.setup_server()
+
+        if custom_tools:
+            for tool, handler in custom_tools:
+                self.add_tool(tool, handler)
+
+    def add_tool(
+        self,
+        tool: Annotated[types.Tool, Doc("MCP Tool definition")],
+        handler: Annotated[
+            Any,
+            Doc("Async handler: (name, arguments, http_request_info, server) -> list of MCP content types"),
+        ],
+    ) -> None:
+        """Register a custom MCP tool with its handler.
+
+        Custom tools are listed alongside auto-generated OpenAPI tools.
+        The handler receives (name, arguments, http_request_info, server)
+        and must return a list of MCP content types.
+
+        Must be called before mount_http() / mount_sse().
+        """
+        self.tools.append(tool)
+        self._custom_handlers[tool.name] = handler
 
     def setup_server(self) -> None:
         openapi_schema = get_openapi(
@@ -174,6 +202,14 @@ class FastApiMCP:
                         )
             except (LookupError, AttributeError) as e:
                 logger.error(f"Could not extract HTTP request info from context: {e}")
+
+            if name in self._custom_handlers:
+                return await self._custom_handlers[name](
+                    name=name,
+                    arguments=arguments,
+                    http_request_info=http_request_info,
+                    server=mcp_server,
+                )
 
             return await self._execute_api_tool(
                 client=self._http_client,
