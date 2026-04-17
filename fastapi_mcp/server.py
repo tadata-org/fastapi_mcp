@@ -34,6 +34,10 @@ class FastApiMCP:
             Optional[str],
             Doc("Name for the MCP server (defaults to app.title)"),
         ] = None,
+        version: Annotated[
+            Optional[str],
+            Doc("Version for the MCP server (defaults to app.version)"),
+        ] = None,
         description: Annotated[
             Optional[str],
             Doc("Description for the MCP server (defaults to app.description)"),
@@ -98,6 +102,7 @@ class FastApiMCP:
 
         self.fastapi = fastapi
         self.name = name or self.fastapi.title or "FastAPI MCP"
+        self.version = version or self.fastapi.version
         self.description = description or self.fastapi.description
 
         self._base_url = "http://apiserver"
@@ -141,7 +146,7 @@ class FastApiMCP:
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
 
-        mcp_server: Server = Server(self.name, self.description)
+        mcp_server: Server = Server(name=self.name, version=self.version, instructions=self.description)
 
         @mcp_server.list_tools()
         async def handle_list_tools() -> List[types.Tool]:
@@ -654,3 +659,4 @@ class FastApiMCP:
             }
 
         return filtered_tools
+

@@ -9,11 +9,13 @@ def test_create_mcp_server(simple_fastapi_app: FastAPI):
     mcp = FastApiMCP(
         simple_fastapi_app,
         name="Test MCP Server",
+        version="1.2.3",
         description="Test description",
     )
 
     # Verify the MCP server was created correctly
     assert mcp.name == "Test MCP Server"
+    assert mcp.version == "1.2.3"
     assert mcp.description == "Test description"
     assert isinstance(mcp.server, Server)
     assert len(mcp.tools) > 0, "Should have extracted tools from the app"
@@ -31,6 +33,7 @@ def test_default_values(simple_fastapi_app: FastAPI):
 
     # Verify default values
     assert mcp.name == simple_fastapi_app.title
+    assert mcp.version == simple_fastapi_app.version
     assert mcp.description == simple_fastapi_app.description
 
     # Mount with default path
