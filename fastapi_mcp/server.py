@@ -141,7 +141,7 @@ class FastApiMCP:
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
 
-        mcp_server: Server = Server(self.name, self.description)
+        mcp_server: Server = Server(self.name, description=self.description)
 
         @mcp_server.list_tools()
         async def handle_list_tools() -> List[types.Tool]:
