@@ -32,7 +32,7 @@ class FastApiMCP:
         ],
         name: Annotated[
             Optional[str],
-            Doc("Name for the MCP server (defaults to app.title)"),
+            Doc("Name for the MCP server (defaults to app.title) j"),
         ] = None,
         description: Annotated[
             Optional[str],
