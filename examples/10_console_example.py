@@ -9,11 +9,96 @@ This example shows how to:
 Access the console at: http://localhost:8000/mcp-console
 """
 
+import sys
+import os
+import site
+from pathlib import Path
+
+user_site = site.getusersitepackages()
+if user_site and user_site not in sys.path:
+    sys.path.insert(0, user_site)
+
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+print("=" * 60)
+print("Python Path Debug Info")
+print("=" * 60)
+print(f"Project root: {project_root}")
+print(f"User site-packages: {user_site}")
+print(f"Current file: {__file__}")
+print()
+print("sys.path:")
+for i, p in enumerate(sys.path):
+    print(f"  [{i}] {p}")
+print()
+print("Checking fastapi_mcp module location...")
+
+try:
+    import fastapi_mcp
+    print(f"fastapi_mcp imported from: {fastapi_mcp.__file__}")
+    print(f"fastapi_mcp version: {fastapi_mcp.__version__}")
+    
+    expected_server_py = project_root / 'fastapi_mcp' / 'server.py'
+    actual_server_py = Path(fastapi_mcp.__file__).parent / 'server.py'
+    
+    print()
+    print(f"Expected server.py: {expected_server_py}")
+    print(f"Actual module path: {Path(fastapi_mcp.__file__).parent}")
+    
+    if str(expected_server_py.parent) != str(Path(fastapi_mcp.__file__).parent):
+        print()
+        print("WARNING: Importing from different location!")
+        print("This may be an older installed version.")
+    
+    print()
+    print("Checking FastApiMCP methods...")
+    from fastapi_mcp import FastApiMCP
+    methods = [m for m in dir(FastApiMCP) if not m.startswith('_')]
+    print(f"FastApiMCP public methods: {methods}")
+    
+    if 'mount_console' not in methods:
+        print()
+        print("=" * 60)
+        print("ERROR: 'mount_console' method not found!")
+        print("=" * 60)
+        print()
+        print("This means Python is importing an older version of fastapi-mcp")
+        print("that doesn't have the new console feature.")
+        print()
+        print(f"Expected location: {expected_server_py}")
+        print(f"Actual location: {actual_server_py}")
+        print()
+        print("Solutions:")
+        print("  1. Force reinstall local version:")
+        print("     pip install -e . --user --force-reinstall --no-deps")
+        print()
+        print("  2. Or check what's in actual location:")
+        print(f"     dir {actual_server_py.parent}")
+        print()
+        print("  3. Or remove the older version from site-packages:")
+        print(f"     pip uninstall fastapi-mcp")
+        print(f"     Then run: pip install -e . --user")
+        sys.exit(1)
+    else:
+        print("✓ 'mount_console' method found!")
+        
+except ImportError as e:
+    print()
+    print("=" * 60)
+    print(f"ERROR: Failed to import: {e}")
+    print("=" * 60)
+    print()
+    print("This usually means dependencies are not installed or not in path.")
+    print()
+    print("Try installing dependencies:")
+    print("  pip install fastapi uvicorn pydantic mcp httpx --user")
+    sys.exit(1)
+
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional
-
-from fastapi_mcp import FastApiMCP
 
 
 app = FastAPI(
