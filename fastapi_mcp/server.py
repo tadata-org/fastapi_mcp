@@ -12,6 +12,8 @@ from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
 from fastapi_mcp.transport.sse import FastApiSseTransport
 from fastapi_mcp.transport.http import FastApiHttpSessionManager
 from fastapi_mcp.types import HTTPRequestInfo, AuthConfig
+from fastapi_mcp.console.logs import LogStore, get_global_log_store, LogEntry
+from fastapi_mcp.console.router import ConsoleConfig, get_console_router
 
 import logging
 
@@ -120,6 +122,8 @@ class FastApiMCP:
 
         self._forward_headers = {h.lower() for h in headers}
         self._http_transport: FastApiHttpSessionManager | None = None  # Store reference to HTTP transport for cleanup
+        self._log_store: LogStore | None = None
+        self._console_mounted: bool = False
 
         self.setup_server()
 
@@ -480,6 +484,192 @@ class FastApiMCP:
             raise ValueError(  # pragma: no cover
                 f"Unsupported transport: {transport}. Use mount_sse() or mount_http() instead."
             )
+
+    def mount_console(
+        self,
+        router: Annotated[
+            Optional[FastAPI | APIRouter],
+            Doc(
+                """
+                The FastAPI app or APIRouter to mount the console to. If not provided, the console
+                will be mounted to the FastAPI app.
+                """
+            ),
+        ] = None,
+        mount_path: Annotated[
+            str,
+            Doc(
+                """
+                Path where the MCP console will be mounted.
+                Defaults to '/mcp-console'.
+                """
+            ),
+        ] = "/mcp-console",
+        log_max_size: Annotated[
+            int,
+            Doc(
+                """
+                Maximum number of log entries to keep.
+                Defaults to 1000.
+                """
+            ),
+        ] = 1000,
+        dependencies: Annotated[
+            Optional[Sequence[params.Depends]],
+            Doc(
+                """
+                FastAPI dependencies to apply to all console endpoints.
+                Can be used for authentication and authorization.
+                """
+            ),
+        ] = None,
+    ) -> None:
+        """
+        Mount the MCP Web Console to **any** FastAPI app or APIRouter.
+
+        The console provides:
+        - A web UI for viewing all registered MCP tools
+        - Online debugging capability to test tool executions
+        - Real-time logging of tool calls with arguments, responses, and execution times
+
+        Args:
+            router: The FastAPI app or APIRouter to mount the console to
+            mount_path: Path where the console will be accessible
+            log_max_size: Maximum number of log entries to keep in memory
+            dependencies: FastAPI dependencies for authentication/authorization
+
+        Example:
+            ```python
+            from fastapi import FastAPI
+            from fastapi_mcp import FastApiMCP
+
+            app = FastAPI()
+
+            # ... define your routes ...
+
+            mcp = FastApiMCP(app)
+            mcp.mount_http()
+            mcp.mount_console()  # Access at http://localhost:8000/mcp-console
+
+            if __name__ == "__main__":
+                import uvicorn
+                uvicorn.run(app, host="0.0.0.0", port=8000)
+            ```
+        """
+        if not mount_path.startswith("/"):
+            mount_path = f"/{mount_path}"
+        if mount_path.endswith("/"):
+            mount_path = mount_path[:-1]
+
+        if not router:
+            router = self.fastapi
+
+        assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
+
+        self._log_store = LogStore(max_size=log_max_size)
+
+        config = ConsoleConfig(
+            enabled=True,
+            mount_path=mount_path,
+            log_max_size=log_max_size,
+            dependencies=dependencies,
+        )
+
+        def tools_getter() -> List[Any]:
+            return self.tools
+
+        def operation_map_getter() -> Dict[str, Any]:
+            return self.operation_map
+
+        async def execute_callback(tool_name: str, arguments: Dict[str, Any]) -> Any:
+            return await self.execute_tool_direct(tool_name, arguments)
+
+        console_router = get_console_router(
+            log_store=self._log_store,
+            tools_getter=tools_getter,
+            operation_map_getter=operation_map_getter,
+            execute_tool_callback=execute_callback,
+            config=config,
+        )
+
+        if isinstance(router, FastAPI):
+            router.include_router(console_router, prefix=mount_path)
+        else:
+            base_prefix = router.prefix if router.prefix else ""
+            full_prefix = base_prefix + mount_path
+            self.fastapi.include_router(console_router, prefix=full_prefix)
+
+        self._console_mounted = True
+        logger.info(f"MCP Console mounted at {mount_path}")
+
+    async def execute_tool_direct(
+        self,
+        tool_name: str,
+        arguments: Dict[str, Any],
+    ) -> Any:
+        """
+        Execute a tool directly without going through the MCP protocol.
+
+        This is used by the web console for direct tool execution.
+
+        Args:
+            tool_name: Name of the tool to execute
+            arguments: Arguments for the tool
+
+        Returns:
+            The tool execution result (parsed JSON if possible)
+        """
+        if tool_name not in self.operation_map:
+            raise ValueError(f"Unknown tool: {tool_name}")
+
+        operation = self.operation_map[tool_name]
+        path: str = operation["path"]
+        method: str = operation["method"]
+        parameters: List[Dict[str, Any]] = operation.get("parameters", [])
+        arguments = arguments.copy() if arguments else {}
+
+        for param in parameters:
+            if param.get("in") == "path" and param.get("name") in arguments:
+                param_name = param.get("name", None)
+                if param_name is None:
+                    raise ValueError(f"Parameter name is None for parameter: {param}")
+                path = path.replace(f"{{{param_name}}}", str(arguments.pop(param_name)))
+
+        query = {}
+        for param in parameters:
+            if param.get("in") == "query" and param.get("name") in arguments:
+                param_name = param.get("name", None)
+                if param_name is None:
+                    raise ValueError(f"Parameter name is None for parameter: {param}")
+                query[param_name] = arguments.pop(param_name)
+
+        headers = {}
+        for param in parameters:
+            if param.get("in") == "header" and param.get("name") in arguments:
+                param_name = param.get("name", None)
+                if param_name is None:
+                    raise ValueError(f"Parameter name is None for parameter: {param}")
+                headers[param_name] = arguments.pop(param_name)
+
+        body = arguments if arguments else None
+
+        logger.debug(f"Making {method.upper()} request to {path}")
+        response = await self._request(self._http_client, method, path, query, headers, body)
+
+        try:
+            result = response.json()
+        except json.JSONDecodeError:
+            if hasattr(response, "text"):
+                result = response.text
+            else:
+                result = response.content
+
+        if 400 <= response.status_code < 600:
+            raise ValueError(
+                f"Error calling {tool_name}. Status code: {response.status_code}. Response: {response.text}"
+            )
+
+        return result
 
     async def _execute_api_tool(
         self,

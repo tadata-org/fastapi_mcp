@@ -14,10 +14,16 @@ except Exception:  # pragma: no cover
 
 from .server import FastApiMCP
 from .types import AuthConfig, OAuthMetadata
-
+from .console.logs import LogStore, LogEntry, LogStatus, get_global_log_store
+from .console.router import ConsoleConfig
 
 __all__ = [
     "FastApiMCP",
     "AuthConfig",
     "OAuthMetadata",
+    "LogStore",
+    "LogEntry",
+    "LogStatus",
+    "get_global_log_store",
+    "ConsoleConfig",
 ]
