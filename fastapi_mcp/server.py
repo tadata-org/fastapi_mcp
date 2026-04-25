@@ -1,9 +1,10 @@
 import json
+import time
 import httpx
 from typing import Dict, Optional, Any, List, Union, Literal, Sequence
 from typing_extensions import Annotated, Doc
 
-from fastapi import FastAPI, Request, APIRouter, params
+from fastapi import FastAPI, Request, APIRouter, params, HTTPException
 from fastapi.openapi.utils import get_openapi
 from mcp.server.lowlevel.server import Server
 import mcp.types as types
@@ -11,7 +12,16 @@ import mcp.types as types
 from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
 from fastapi_mcp.transport.sse import FastApiSseTransport
 from fastapi_mcp.transport.http import FastApiHttpSessionManager
-from fastapi_mcp.types import HTTPRequestInfo, AuthConfig
+from fastapi_mcp.types import (
+    HTTPRequestInfo,
+    AuthConfig,
+    ExtendedAuthConfig,
+    PanelConfig,
+    RateLimitConfig,
+    CallStatus,
+    ApiKey,
+    User,
+)
 
 import logging
 
@@ -72,8 +82,8 @@ class FastApiMCP:
             Doc("List of tags to exclude from MCP tools. Cannot be used with include_tags."),
         ] = None,
         auth_config: Annotated[
-            Optional[AuthConfig],
-            Doc("Configuration for MCP authentication"),
+            Optional[Union[AuthConfig, ExtendedAuthConfig]],
+            Doc("Configuration for MCP authentication and extended features"),
         ] = None,
         headers: Annotated[
             List[str],
@@ -84,6 +94,34 @@ class FastApiMCP:
                 """
             ),
         ] = ["authorization"],
+        enable_panel: Annotated[
+            bool,
+            Doc("Whether to enable the web panel"),
+        ] = True,
+        panel_config: Annotated[
+            Optional[PanelConfig],
+            Doc("Configuration for the web panel"),
+        ] = None,
+        enable_rate_limit: Annotated[
+            bool,
+            Doc("Whether to enable rate limiting"),
+        ] = False,
+        rate_limit_config: Annotated[
+            Optional[RateLimitConfig],
+            Doc("Configuration for rate limiting"),
+        ] = None,
+        enable_call_logging: Annotated[
+            bool,
+            Doc("Whether to enable call logging and monitoring"),
+        ] = True,
+        enable_user_management: Annotated[
+            bool,
+            Doc("Whether to enable user management"),
+        ] = False,
+        enable_api_key_management: Annotated[
+            bool,
+            Doc("Whether to enable API key management"),
+        ] = False,
     ):
         # Validate operation and tag filtering options
         if include_operations is not None and exclude_operations is not None:
@@ -119,9 +157,57 @@ class FastApiMCP:
         )
 
         self._forward_headers = {h.lower() for h in headers}
-        self._http_transport: FastApiHttpSessionManager | None = None  # Store reference to HTTP transport for cleanup
+        self._http_transport: FastApiHttpSessionManager | None = None
 
+        self._enable_panel = enable_panel
+        self._panel_config = panel_config or PanelConfig()
+        self._enable_rate_limit = enable_rate_limit
+        self._rate_limit_config = rate_limit_config or RateLimitConfig()
+        self._enable_call_logging = enable_call_logging
+        self._enable_user_management = enable_user_management
+        self._enable_api_key_management = enable_api_key_management
+
+        self._user_manager = None
+        self._api_key_manager = None
+        self._rate_limiter = None
+        self._call_logger = None
+        self._panel_router = None
+
+        self._setup_extensions()
         self.setup_server()
+
+    def _setup_extensions(self) -> None:
+        if self._enable_user_management:
+            try:
+                from fastapi_mcp.auth.user_manager import UserManager
+                self._user_manager = UserManager()
+                logger.info("User management enabled")
+            except ImportError as e:
+                logger.warning(f"Failed to enable user management: {e}")
+
+        if self._enable_api_key_management:
+            try:
+                from fastapi_mcp.auth.api_key_manager import ApiKeyManager
+                self._api_key_manager = ApiKeyManager()
+                logger.info("API key management enabled")
+            except ImportError as e:
+                logger.warning(f"Failed to enable API key management: {e}")
+
+        if self._enable_rate_limit:
+            try:
+                from fastapi_mcp.auth.rate_limiter import RateLimiter
+                self._rate_limiter = RateLimiter(self._rate_limit_config)
+                logger.info("Rate limiting enabled")
+            except ImportError as e:
+                logger.warning(f"Failed to enable rate limiting: {e}")
+
+        if self._enable_call_logging:
+            try:
+                from fastapi_mcp.monitoring.call_logger import CallLogger
+                self._call_logger = CallLogger()
+                logger.info("Call logging enabled")
+            except ImportError as e:
+                logger.warning(f"Failed to enable call logging: {e}")
 
     def setup_server(self) -> None:
         openapi_schema = get_openapi(
@@ -423,6 +509,75 @@ class FastApiMCP:
 
         logger.info(f"MCP SSE server listening at {mount_path}")
 
+    def mount_panel(
+        self,
+        router: Annotated[
+            Optional[FastAPI | APIRouter],
+            Doc(
+                """
+                The FastAPI app or APIRouter to mount the panel to. If not provided, the panel
+                will be mounted to the FastAPI app.
+                """
+            ),
+        ] = None,
+        mount_path: Annotated[
+            Optional[str],
+            Doc(
+                """
+                Path where the panel will be mounted.
+                If not provided, uses the path from panel_config.
+                """
+            ),
+        ] = None,
+    ) -> None:
+        """
+        Mount the web panel to a FastAPI app or APIRouter.
+        
+        The panel provides:
+        - Dashboard with real-time monitoring
+        - API testing interface
+        - API Key management
+        - User management
+        - Call logs viewer
+        """
+        if not self._enable_panel:
+            logger.info("Panel is disabled, skipping mount")
+            return
+
+        if not router:
+            router = self.fastapi
+
+        assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
+
+        actual_mount_path = mount_path or self._panel_config.mount_path
+
+        if not actual_mount_path.startswith("/"):
+            actual_mount_path = f"/{actual_mount_path}"
+        if actual_mount_path.endswith("/"):
+            actual_mount_path = actual_mount_path[:-1]
+
+        try:
+            from fastapi_mcp.panel.panel import PanelRouter
+
+            panel_router = PanelRouter(
+                config=self._panel_config,
+                user_manager=self._user_manager,
+                api_key_manager=self._api_key_manager,
+                rate_limiter=self._rate_limiter,
+                call_logger=self._call_logger,
+            )
+
+            router.include_router(panel_router.router, prefix=actual_mount_path)
+
+            if isinstance(router, APIRouter):
+                self.fastapi.include_router(router)
+
+            self._panel_router = panel_router
+            logger.info(f"MCP Panel mounted at {actual_mount_path}")
+
+        except ImportError as e:
+            logger.warning(f"Failed to mount panel: {e}")
+
     def mount(
         self,
         router: Annotated[
@@ -498,6 +653,17 @@ class FastApiMCP:
         Returns:
             The result as MCP content types
         """
+        start_time = time.time()
+        user_id = None
+        api_key_id = None
+        api_key: Optional[ApiKey] = None
+        call_status = CallStatus.SUCCESS
+        response_status = 200
+        response_body = None
+        error_message = None
+        client_ip = None
+        user_agent = None
+
         if tool_name not in operation_map:
             raise Exception(f"Unknown tool: {tool_name}")
 
@@ -505,7 +671,57 @@ class FastApiMCP:
         path: str = operation["path"]
         method: str = operation["method"]
         parameters: List[Dict[str, Any]] = operation.get("parameters", [])
-        arguments = arguments.copy() if arguments else {}  # Deep copy arguments to avoid mutating the original
+        arguments = arguments.copy() if arguments else {}
+
+        if http_request_info and http_request_info.headers:
+            auth_header = http_request_info.headers.get("authorization", "")
+            if auth_header.lower().startswith("bearer "):
+                api_key_value = auth_header[7:].strip()
+                if self._api_key_manager:
+                    api_key = self._api_key_manager.validate_api_key(api_key_value)
+                    if api_key:
+                        api_key_id = api_key.id
+                        user_id = api_key.user_id
+                        logger.debug(f"Authenticated with API key: {api_key_id}")
+
+            client_ip = http_request_info.headers.get("x-forwarded-for", http_request_info.headers.get("x-real-ip"))
+            user_agent = http_request_info.headers.get("user-agent")
+
+        if self._enable_rate_limit and self._rate_limiter:
+            user = None
+            if self._user_manager and user_id:
+                user = self._user_manager.get_user(user_id)
+
+            allowed, rate_limit_info = self._rate_limiter.check_rate_limit(
+                user_id=user_id,
+                api_key=api_key,
+            )
+
+            if not allowed:
+                call_status = CallStatus.RATE_LIMITED
+                logger.warning(f"Rate limit exceeded for tool {tool_name}: {rate_limit_info}")
+
+                if self._call_logger:
+                    duration_ms = (time.time() - start_time) * 1000
+                    self._call_logger.log_call(
+                        tool_name=tool_name,
+                        status=call_status,
+                        duration_ms=duration_ms,
+                        request_method=method,
+                        request_path=path,
+                        user_id=user_id,
+                        api_key_id=api_key_id,
+                        request_headers=http_request_info.headers if http_request_info else {},
+                        response_status=429,
+                        error_message="Rate limit exceeded",
+                        client_ip=client_ip,
+                        user_agent=user_agent,
+                    )
+
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Rate limit exceeded. Try again in {rate_limit_info.get('reset_seconds', 0):.1f} seconds.",
+                )
 
         for param in parameters:
             if param.get("in") == "path" and param.get("name") in arguments:
@@ -530,44 +746,79 @@ class FastApiMCP:
                     raise ValueError(f"Parameter name is None for parameter: {param}")
                 headers[param_name] = arguments.pop(param_name)
 
-        # Forward headers that are in the allowlist
         if http_request_info and http_request_info.headers:
             for name, value in http_request_info.headers.items():
-                # case-insensitive check for allowed headers
                 if name.lower() in self._forward_headers:
                     headers[name] = value
 
         body = arguments if arguments else None
+        request_body_str = None
+        if body:
+            try:
+                request_body_str = json.dumps(body, ensure_ascii=False)
+            except (TypeError, ValueError):
+                request_body_str = str(body)
 
+        result_text = ""
         try:
             logger.debug(f"Making {method.upper()} request to {path}")
             response = await self._request(client, method, path, query, headers, body)
+            response_status = response.status_code
 
-            # TODO: Better typing for the AsyncClientProtocol. It should return a ResponseProtocol that has a json() method that returns a dict/list/etc.
             try:
                 result = response.json()
                 result_text = json.dumps(result, indent=2, ensure_ascii=False)
+                response_body = result_text
             except json.JSONDecodeError:
                 if hasattr(response, "text"):
                     result_text = response.text
+                    response_body = result_text
                 else:
                     result_text = response.content
+                    response_body = str(result_text) if isinstance(result_text, bytes) else result_text
 
-            # If not raising an exception, the MCP server will return the result as a regular text response, without marking it as an error.
-            # TODO: Use a raise_for_status() method on the response (it needs to also be implemented in the AsyncClientProtocol)
             if 400 <= response.status_code < 600:
-                raise Exception(
-                    f"Error calling {tool_name}. Status code: {response.status_code}. Response: {response.text}"
-                )
+                call_status = CallStatus.ERROR
+                error_message = f"Status code: {response.status_code}. Response: {response.text}"
+                raise Exception(error_message)
 
-            try:
-                return [types.TextContent(type="text", text=result_text)]
-            except ValueError:
-                return [types.TextContent(type="text", text=result_text)]
+        except HTTPException:
+            raise
 
         except Exception as e:
+            call_status = CallStatus.ERROR
+            error_message = str(e)
             logger.exception(f"Error calling {tool_name}")
             raise e
+
+        finally:
+            duration_ms = (time.time() - start_time) * 1000
+
+            if api_key and self._api_key_manager:
+                self._api_key_manager.record_usage(api_key.id)
+
+            if self._call_logger:
+                self._call_logger.log_call(
+                    tool_name=tool_name,
+                    status=call_status,
+                    duration_ms=duration_ms,
+                    request_method=method,
+                    request_path=path,
+                    user_id=user_id,
+                    api_key_id=api_key_id,
+                    request_headers=http_request_info.headers if http_request_info else {},
+                    request_body=request_body_str,
+                    response_status=response_status,
+                    response_body=response_body,
+                    error_message=error_message,
+                    client_ip=client_ip,
+                    user_agent=user_agent,
+                )
+
+        try:
+            return [types.TextContent(type="text", text=result_text)]
+        except ValueError:
+            return [types.TextContent(type="text", text=result_text)]
 
     async def _request(
         self,

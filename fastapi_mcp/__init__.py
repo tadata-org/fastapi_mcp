@@ -13,11 +13,46 @@ except Exception:  # pragma: no cover
     __version__ = "0.0.0.dev0"  # pragma: no cover
 
 from .server import FastApiMCP
-from .types import AuthConfig, OAuthMetadata
+from .types import (
+    AuthConfig,
+    OAuthMetadata,
+    ExtendedAuthConfig,
+    PanelConfig,
+    RateLimitConfig,
+    SecurityConfig,
+    UserRole,
+    Permission,
+    User,
+    UserCreate,
+    UserUpdate,
+    ApiKeyStatus,
+    ApiKey,
+    ApiKeyCreate,
+    ApiKeyUpdate,
+    CallStatus,
+    CallLog,
+    MonitorData,
+)
 
 
 __all__ = [
     "FastApiMCP",
     "AuthConfig",
     "OAuthMetadata",
+    "ExtendedAuthConfig",
+    "PanelConfig",
+    "RateLimitConfig",
+    "SecurityConfig",
+    "UserRole",
+    "Permission",
+    "User",
+    "UserCreate",
+    "UserUpdate",
+    "ApiKeyStatus",
+    "ApiKey",
+    "ApiKeyCreate",
+    "ApiKeyUpdate",
+    "CallStatus",
+    "CallLog",
+    "MonitorData",
 ]
