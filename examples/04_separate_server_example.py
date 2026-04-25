@@ -3,6 +3,13 @@ This example shows how to run the MCP server and the FastAPI app separately.
 You can create an MCP server from one FastAPI app, and mount it to a different app.
 """
 
+import sys
+from pathlib import Path
+
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 from fastapi import FastAPI
 
 from examples.shared.apps.items import app
