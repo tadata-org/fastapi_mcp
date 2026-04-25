@@ -5,7 +5,7 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 import logging
 import httpx
 
-from examples.shared.setup import setup_logging
+from .setup import setup_logging
 
 setup_logging()
 
