@@ -22,6 +22,13 @@ In order to configure the auth header, the config file for the MCP server should
 ```
 """
 
+import sys
+from pathlib import Path
+
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 from examples.shared.apps.items import app  # The FastAPI app
 from examples.shared.setup import setup_logging
 

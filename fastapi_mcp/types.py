@@ -1,5 +1,7 @@
 import time
-from typing import Any, Dict, Annotated, Union, Optional, Sequence, Literal, List
+import secrets
+from datetime import datetime, timedelta
+from typing import Any, Dict, Annotated, Union, Optional, Sequence, Literal, List, Callable
 from typing_extensions import Doc
 from pydantic import (
     BaseModel,
@@ -7,9 +9,11 @@ from pydantic import (
     HttpUrl,
     field_validator,
     model_validator,
+    Field,
 )
 from pydantic.main import IncEx
 from fastapi import params
+from enum import Enum
 
 
 StrHttpUrl = Annotated[Union[str, HttpUrl], HttpUrl]
@@ -382,3 +386,195 @@ class ClientRegistrationResponse(BaseType):
     grant_types: List[str]
     token_endpoint_auth_method: str
     client_name: str
+
+
+class UserRole(str, Enum):
+    ADMIN = "admin"
+    USER = "user"
+    GUEST = "guest"
+    API_ONLY = "api_only"
+
+
+class Permission(str, Enum):
+    READ_TOOLS = "read:tools"
+    CALL_TOOLS = "call:tools"
+    MANAGE_USERS = "manage:users"
+    MANAGE_API_KEYS = "manage:api_keys"
+    VIEW_LOGS = "view:logs"
+    VIEW_METRICS = "view:metrics"
+    ADMIN_ALL = "admin:all"
+
+
+class User(BaseType):
+    id: str
+    username: str
+    email: Optional[str] = None
+    role: UserRole = UserRole.USER
+    permissions: List[Permission] = []
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_login: Optional[datetime] = None
+
+    def has_permission(self, permission: Permission) -> bool:
+        if self.role == UserRole.ADMIN or Permission.ADMIN_ALL in self.permissions:
+            return True
+        return permission in self.permissions
+
+    def has_role(self, role: UserRole) -> bool:
+        role_hierarchy = {UserRole.GUEST: 0, UserRole.USER: 1, UserRole.API_ONLY: 1, UserRole.ADMIN: 2}
+        return role_hierarchy.get(self.role, 0) >= role_hierarchy.get(role, 0)
+
+
+class UserCreate(BaseType):
+    username: str
+    email: Optional[str] = None
+    role: UserRole = UserRole.USER
+    permissions: List[Permission] = []
+    password: Optional[str] = None
+
+
+class UserUpdate(BaseType):
+    email: Optional[str] = None
+    role: Optional[UserRole] = None
+    permissions: Optional[List[Permission]] = None
+    is_active: Optional[bool] = None
+
+
+class ApiKeyStatus(str, Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    REVOKED = "revoked"
+
+
+class ApiKey(BaseType):
+    id: str
+    key: str
+    name: str
+    description: Optional[str] = None
+    user_id: str
+    status: ApiKeyStatus = ApiKeyStatus.ACTIVE
+    permissions: List[Permission] = []
+    rate_limit: Optional[int] = None
+    rate_limit_window: int = 60
+    expires_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    usage_count: int = 0
+
+    @classmethod
+    def generate_key(cls, prefix: str = "mcp") -> str:
+        return f"{prefix}_{secrets.token_urlsafe(32)}"
+
+    def is_valid(self) -> bool:
+        if self.status != ApiKeyStatus.ACTIVE:
+            return False
+        if self.expires_at and datetime.utcnow() > self.expires_at:
+            return False
+        return True
+
+
+class ApiKeyCreate(BaseType):
+    name: str
+    description: Optional[str] = None
+    permissions: List[Permission] = []
+    rate_limit: Optional[int] = None
+    rate_limit_window: int = 60
+    expires_in_days: Optional[int] = None
+
+
+class ApiKeyUpdate(BaseType):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[ApiKeyStatus] = None
+    permissions: Optional[List[Permission]] = None
+    rate_limit: Optional[int] = None
+    rate_limit_window: Optional[int] = None
+
+
+class RateLimitConfig(BaseType):
+    enabled: bool = True
+    default_limit: int = 100
+    default_window: int = 60
+    user_limit: Optional[int] = None
+    api_key_limit: Optional[int] = None
+    global_limit: Optional[int] = None
+
+    def get_effective_limit(self, api_key: Optional[ApiKey] = None) -> int:
+        if api_key and api_key.rate_limit:
+            return api_key.rate_limit
+        if api_key and self.api_key_limit:
+            return self.api_key_limit
+        if self.user_limit:
+            return self.user_limit
+        return self.default_limit
+
+
+class CallStatus(str, Enum):
+    SUCCESS = "success"
+    ERROR = "error"
+    RATE_LIMITED = "rate_limited"
+    UNAUTHORIZED = "unauthorized"
+
+
+class CallLog(BaseType):
+    id: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    tool_name: str
+    user_id: Optional[str] = None
+    api_key_id: Optional[str] = None
+    status: CallStatus
+    duration_ms: float
+    request_method: str
+    request_path: str
+    request_headers: Dict[str, str] = {}
+    request_body: Optional[str] = None
+    response_status: int
+    response_body: Optional[str] = None
+    error_message: Optional[str] = None
+    client_ip: Optional[str] = None
+    user_agent: Optional[str] = None
+
+
+class MonitorData(BaseType):
+    total_calls: int = 0
+    success_calls: int = 0
+    error_calls: int = 0
+    rate_limited_calls: int = 0
+    total_users: int = 0
+    active_api_keys: int = 0
+    uptime_seconds: float = 0
+    avg_response_time_ms: float = 0
+    p99_response_time_ms: float = 0
+    requests_per_second: float = 0
+    top_tools: List[Dict[str, Any]] = []
+    recent_errors: List[Dict[str, Any]] = []
+    active_users: List[Dict[str, Any]] = []
+
+
+class PanelConfig(BaseType):
+    enabled: bool = True
+    mount_path: str = "/mcp-panel"
+    title: str = "FastAPI MCP Panel"
+    enable_testing: bool = True
+    enable_monitoring: bool = True
+    enable_api_keys: bool = True
+    enable_users: bool = False
+    enable_logs: bool = True
+    logo_url: Optional[str] = None
+    theme: Literal["light", "dark", "auto"] = "auto"
+
+
+class SecurityConfig(BaseType):
+    enabled: bool = True
+    require_auth: bool = False
+    require_api_key: bool = False
+    allow_guest_access: bool = False
+    session_timeout_minutes: int = 60
+    jwt_secret: Optional[str] = None
+    password_hash_rounds: int = 12
+
+
+class ExtendedAuthConfig(AuthConfig):
+    security: Optional[SecurityConfig] = None
+    rate_limit: Optional[RateLimitConfig] = None
+    panel: Optional[PanelConfig] = None
