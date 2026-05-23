@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 import mcp.types as types
+from pydantic import BaseModel
+from typing import List, Literal, Union
 
 from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
 from fastapi_mcp.openapi.utils import (
@@ -422,3 +424,51 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     if "items" in properties:
         item_props = properties["items"]["items"]["properties"]
         assert "total" in item_props
+
+
+def test_self_referencing_schema_does_not_raise_recursion_error():
+    """
+    Regression test for https://github.com/tadata-org/fastapi_mcp/issues/287.
+    resolve_schema_references() must not raise RecursionError when the OpenAPI
+    schema contains a self-referencing (recursive) Pydantic model.
+    """
+
+    class ComparisonFilter(BaseModel):
+        type: Literal["eq", "ne", "gt", "lt"]
+        key: str
+        value: str
+
+    class CompoundFilter(BaseModel):
+        type: Literal["and", "or"]
+        filters: List[Union[ComparisonFilter, "CompoundFilter"]]
+
+    CompoundFilter.model_rebuild()
+
+    class SearchRequest(BaseModel):
+        query: str
+        filters: CompoundFilter | None = None
+
+    app = FastAPI()
+
+    @app.post("/search")
+    async def search(request: SearchRequest):
+        return {"status": "ok"}
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        openapi_version=app.openapi_version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    # Must not raise RecursionError
+    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
+
+    assert len(tools) == 1
+    assert "search_search_post" in operation_map
+
+    tool = tools[0]
+    assert isinstance(tool, types.Tool)
+    assert tool.inputSchema is not None
+    assert "query" in tool.inputSchema["properties"]
