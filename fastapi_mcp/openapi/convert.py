@@ -14,6 +14,14 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
+_COMPOSITION_KEYWORDS = ("anyOf", "oneOf", "allOf")
+
+
+def _has_composition_keyword(schema: Dict[str, Any]) -> bool:
+    """True when ``schema`` uses ``anyOf`` / ``oneOf`` / ``allOf``."""
+    return any(keyword in schema for keyword in _COMPOSITION_KEYWORDS)
+
+
 def convert_openapi_to_mcp_tools(
     openapi_schema: Dict[str, Any],
     describe_all_responses: bool = False,
@@ -207,7 +215,10 @@ def convert_openapi_to_mcp_tools(
                 if param_desc:
                     properties[param_name]["description"] = param_desc
 
-                if "type" not in properties[param_name]:
+                # Skip the "type" inject when anyOf/oneOf/allOf is present —
+                # adding a sibling "type" over-constrains the schema (the
+                # validator AND's both).
+                if not _has_composition_keyword(properties[param_name]) and "type" not in properties[param_name]:
                     properties[param_name]["type"] = param_schema.get("type", "string")
 
                 if param_required:
@@ -224,7 +235,7 @@ def convert_openapi_to_mcp_tools(
                 if param_desc:
                     properties[param_name]["description"] = param_desc
 
-                if "type" not in properties[param_name]:
+                if not _has_composition_keyword(properties[param_name]) and "type" not in properties[param_name]:
                     properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
 
                 if "default" in param_schema:
@@ -244,7 +255,7 @@ def convert_openapi_to_mcp_tools(
                 if param_desc:
                     properties[param_name]["description"] = param_desc
 
-                if "type" not in properties[param_name]:
+                if not _has_composition_keyword(properties[param_name]) and "type" not in properties[param_name]:
                     properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
 
                 if "default" in param_schema:
