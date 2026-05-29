@@ -30,12 +30,39 @@ class FastApiHttpSessionManager:
         self._manager_started = False
         self._startup_lock = asyncio.Lock()
 
+    async def startup(self) -> None:
+        """
+        Start the session manager.
+
+        Call this from a FastAPI ``on_startup`` event handler (or lifespan) so
+        that the StreamableHTTP session manager is ready before the first
+        request arrives and the ASGI lifespan protocol is handled correctly.
+        """
+        await self._ensure_session_manager_started()
+
+    async def shutdown(self) -> None:
+        """
+        Stop the session manager.
+
+        Call this from a FastAPI ``on_shutdown`` event handler (or lifespan)
+        so that in-flight sessions are drained and the background task is
+        cancelled cleanly.
+        """
+        if self._manager_task and not self._manager_task.done():
+            self._manager_task.cancel()
+            try:
+                await self._manager_task
+            except asyncio.CancelledError:
+                pass
+        self._manager_started = False
+        self._session_manager = None
+
     async def _ensure_session_manager_started(self) -> None:
         """
         Ensure the session manager is started.
 
-        This is called lazily on the first request to start the session manager
-        if it hasn't been started yet.
+        Called eagerly from ``startup()`` and also as a lazy fallback on the
+        first request in case the startup hook was not registered.
         """
         if self._manager_started:
             return
@@ -84,7 +111,7 @@ class FastApiHttpSessionManager:
         This converts FastAPI's Request/Response to ASGI scope/receive/send
         and then converts the result back to a FastAPI Response.
         """
-        # Ensure session manager is started
+        # Ensure session manager is started (lazy fallback if startup hook wasn't used)
         await self._ensure_session_manager_started()
 
         if not self._session_manager:
@@ -125,12 +152,3 @@ class FastApiHttpSessionManager:
             logger.exception("Error in StreamableHTTPSessionManager")
             raise HTTPException(status_code=500, detail="Internal server error")
 
-    async def shutdown(self) -> None:
-        """Clean up the session manager and background task."""
-        if self._manager_task and not self._manager_task.done():
-            self._manager_task.cancel()
-            try:
-                await self._manager_task
-            except asyncio.CancelledError:
-                pass
-        self._manager_started = False
