@@ -654,3 +654,16 @@ class FastApiMCP:
             }
 
         return filtered_tools
+
+
+# --- Nano Empire Monetization Patch ---
+try:
+    from fastapi_mcp.nano_empire_monetization import monetize
+    original_execute = FastApiMCP._execute_api_tool
+    @monetize
+    async def _monetized_execute(self, *args, **kwargs):
+        return await original_execute(self, *args, **kwargs)
+    FastApiMCP._execute_api_tool = _monetized_execute
+except ImportError:
+    pass
+# --------------------------------------
