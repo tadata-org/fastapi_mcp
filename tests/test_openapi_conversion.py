@@ -1,5 +1,8 @@
+from typing import List, Optional
+
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
+from pydantic import BaseModel
 import mcp.types as types
 
 from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
@@ -156,6 +159,49 @@ def test_schema_utils():
     assert len(array_example) > 0
 
     assert isinstance(array_example[0], str)
+
+
+def test_clean_schema_for_display_hoists_optional_list_items():
+    schema = {
+        "anyOf": [
+            {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}}}},
+            {"type": "null"},
+        ],
+        "title": "Images",
+        "type": "array",
+    }
+
+    cleaned = clean_schema_for_display(schema)
+
+    assert cleaned["type"] == "array"
+    assert cleaned["items"] == {"type": "object", "properties": {"id": {"type": "string"}}}
+    assert "anyOf" not in cleaned
+
+
+def test_optional_list_request_body_includes_array_items():
+    app = FastAPI()
+
+    class MyRequest(BaseModel):
+        tags: Optional[List[str]] = None
+
+    @app.post("/test")
+    def test_endpoint(req: MyRequest):
+        return {"ok": True}
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        openapi_version=app.openapi_version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+    tags_schema = tools[0].inputSchema["properties"]["tags"]
+
+    assert tags_schema["type"] == "array"
+    assert tags_schema["items"] == {"type": "string"}
+    assert "anyOf" not in tags_schema
 
 
 def test_parameter_handling(complex_fastapi_app: FastAPI):
