@@ -213,6 +213,8 @@ def convert_openapi_to_mcp_tools(
                 if param_required:
                     required_props.append(param_name)
 
+                properties[param_name] = clean_schema_for_display(properties[param_name])
+
             # Add query parameters to properties
             for param_name, param in query_params:
                 param_schema = param.get("schema", {})
@@ -233,6 +235,8 @@ def convert_openapi_to_mcp_tools(
                 if param_required:
                     required_props.append(param_name)
 
+                properties[param_name] = clean_schema_for_display(properties[param_name])
+
             # Add body parameters to properties
             for param_name, param in body_params:
                 param_schema = param.get("schema", {})
@@ -252,6 +256,8 @@ def convert_openapi_to_mcp_tools(
 
                 if param_required:
                     required_props.append(param_name)
+
+                properties[param_name] = clean_schema_for_display(properties[param_name])
 
             # Create a proper input schema for the tool
             input_schema = {"type": "object", "properties": properties, "title": f"{operation_id}Arguments"}
