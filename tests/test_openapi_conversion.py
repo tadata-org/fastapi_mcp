@@ -150,6 +150,57 @@ def test_schema_utils():
     assert get_single_param_type_from_schema({"type": "string"}) == "string"
     assert get_single_param_type_from_schema({"type": "array", "items": {"type": "string"}}) == "array"
 
+
+def test_union_anyof_schema_preserves_anyof_without_injected_type():
+    openapi_schema = {
+        "openapi": "3.1.0",
+        "info": {"title": "Test", "version": "0.1.0"},
+        "paths": {
+            "/save": {
+                "post": {
+                    "operationId": "save",
+                    "summary": "Save tags",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "tags": {
+                                            "anyOf": [
+                                                {
+                                                    "type": "object",
+                                                    "additionalProperties": {
+                                                        "type": "array",
+                                                        "items": {"type": "string"},
+                                                    },
+                                                },
+                                                {"type": "array", "items": {"type": "string"}},
+                                            ],
+                                        }
+                                    },
+                                    "required": ["tags"],
+                                }
+                            }
+                        },
+                    },
+                    "responses": {"200": {"description": "OK"}},
+                }
+            }
+        },
+    }
+
+    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
+
+    save_tool = next(tool for tool in tools if tool.name == "save")
+    tags_schema = save_tool.inputSchema["properties"]["tags"]
+
+    assert "anyOf" in tags_schema
+    assert "type" not in tags_schema
+    assert len(tags_schema["anyOf"]) == 2
+    assert operation_map["save"]["method"] == "post"
+
     array_schema = {"type": "array", "items": {"type": "string", "enum": ["red", "green", "blue"]}}
     array_example = generate_example_from_schema(array_schema)
     assert isinstance(array_example, list)
@@ -176,16 +227,19 @@ def test_parameter_handling(complex_fastapi_app: FastAPI):
     assert "product_id" not in properties  # This is from get_product, not list_products
 
     assert "category" in properties
-    assert properties["category"].get("type") == "string"  # Enum converted to string
+    assert "anyOf" in properties["category"]
+    assert "type" not in properties["category"]
+    assert properties["category"]["anyOf"][0].get("type") == "string"
     assert "description" in properties["category"]
     assert "Filter by product category" in properties["category"]["description"]
 
     assert "min_price" in properties
-    assert properties["min_price"].get("type") == "number"
+    assert "anyOf" in properties["min_price"]
+    assert properties["min_price"]["anyOf"][0].get("type") == "number"
     assert "description" in properties["min_price"]
     assert "Minimum price filter" in properties["min_price"]["description"]
-    if "minimum" in properties["min_price"]:
-        assert properties["min_price"]["minimum"] > 0  # gt=0 in Query param
+    if "exclusiveMinimum" in properties["min_price"]["anyOf"][0]:
+        assert properties["min_price"]["anyOf"][0]["exclusiveMinimum"] == 0.0
 
     assert "in_stock_only" in properties
     assert properties["in_stock_only"].get("type") == "boolean"
@@ -204,7 +258,8 @@ def test_parameter_handling(complex_fastapi_app: FastAPI):
         assert properties["size"]["maximum"] <= 100  # le=100 in Query param
 
     assert "tag" in properties
-    assert properties["tag"].get("type") == "array"
+    assert "anyOf" in properties["tag"]
+    assert properties["tag"]["anyOf"][0].get("type") == "array"
 
     required = list_products_tool.inputSchema.get("required", [])
     assert "page" not in required  # Has default value
@@ -416,8 +471,8 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     assert properties["customer_id"]["title"] == "customer_id"
 
     assert "notes" in properties
-    assert "type" in properties["notes"]
-    assert properties["notes"]["type"] in ["string", "object"]  # Default should be either string or object
+    assert "anyOf" in properties["notes"]
+    assert "type" not in properties["notes"]
 
     if "items" in properties:
         item_props = properties["items"]["items"]["properties"]
