@@ -309,6 +309,32 @@ class FastApiMCP:
         else:
             logger.info("No auth config provided, skipping auth setup")
 
+    def _resolve_router_include_prefix(self, router: APIRouter) -> str:
+        """
+        Resolve the prefix under which `router` was actually mounted onto `self.fastapi`.
+
+        When a router is included via `app.include_router(router, prefix="/x")` without
+        setting `prefix` on the `APIRouter()` constructor itself, that prefix is only
+        reflected in the resulting routes on `app.routes` -- the router object's own
+        `.prefix` attribute stays empty. To find the effective prefix, match a route
+        already registered on `router` against its counterpart on `self.fastapi.routes`
+        (same endpoint function) and diff the paths.
+
+        Returns an empty string if no match is found (e.g. the router hasn't been
+        included into the app yet), preserving the previous behavior of relying solely
+        on `router.prefix`.
+        """
+        for router_route in router.routes:
+            router_path = getattr(router_route, "path", None)
+            router_endpoint = getattr(router_route, "endpoint", None)
+            if not router_path or router_endpoint is None:
+                continue
+            for app_route in self.fastapi.routes:
+                app_path = getattr(app_route, "path", "")
+                if getattr(app_route, "endpoint", None) is router_endpoint and app_path.endswith(router_path):
+                    return app_path[: -len(router_path)]
+        return ""
+
     def mount_http(
         self,
         router: Annotated[
@@ -348,6 +374,8 @@ class FastApiMCP:
 
         assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
 
+        include_prefix = self._resolve_router_include_prefix(router) if isinstance(router, APIRouter) else ""
+
         http_transport = FastApiHttpSessionManager(mcp_server=self.server)
         dependencies = self._auth_config.dependencies if self._auth_config else None
 
@@ -361,7 +389,7 @@ class FastApiMCP:
         #
         # TODO: Find a better way to do this.
         if isinstance(router, APIRouter):
-            self.fastapi.include_router(router)
+            self.fastapi.include_router(router, prefix=include_prefix)
 
         logger.info(f"MCP HTTP server listening at {mount_path}")
 
@@ -404,7 +432,8 @@ class FastApiMCP:
 
         # Build the base path correctly for the SSE transport
         assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
-        base_path = mount_path if isinstance(router, FastAPI) else router.prefix + mount_path
+        include_prefix = self._resolve_router_include_prefix(router) if isinstance(router, APIRouter) else ""
+        base_path = mount_path if isinstance(router, FastAPI) else include_prefix + router.prefix + mount_path
         messages_path = f"{base_path}/messages/"
 
         sse_transport = FastApiSseTransport(messages_path)
@@ -419,7 +448,7 @@ class FastApiMCP:
         #
         # TODO: Find a better way to do this.
         if isinstance(router, APIRouter):
-            self.fastapi.include_router(router)
+            self.fastapi.include_router(router, prefix=include_prefix)
 
         logger.info(f"MCP SSE server listening at {mount_path}")
 

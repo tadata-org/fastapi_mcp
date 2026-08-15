@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from mcp.server.lowlevel.server import Server
 
 from fastapi_mcp import FastApiMCP
@@ -64,3 +64,28 @@ def test_normalize_paths(simple_fastapi_app: FastAPI):
     # Check that the route was added with a normalized path
     route_found = any("/test-mcp2" in str(route) for route in simple_fastapi_app.routes)
     assert route_found, "Normalized mount path not found in app routes"
+
+
+def test_mount_router_with_include_router_prefix(simple_fastapi_app: FastAPI):
+    """
+    Regression test for https://github.com/tadata-org/fastapi_mcp/issues/204.
+
+    When an APIRouter is created without a `prefix` and is instead given one via
+    `app.include_router(router, prefix=...)`, the MCP server should still be mounted
+    at the router's effective path, not at the app root.
+    """
+    other_router = APIRouter()  # No prefix on the constructor
+
+    @other_router.get("/ping", operation_id="ping")
+    async def ping() -> dict:
+        return {"ping": "pong"}
+
+    simple_fastapi_app.include_router(other_router, prefix="/other/route")
+
+    mcp = FastApiMCP(simple_fastapi_app)
+    mcp.mount_http(other_router)
+
+    mounted_paths = [getattr(route, "path", None) for route in simple_fastapi_app.routes]
+
+    assert "/other/route/mcp" in mounted_paths, f"Expected mount path not found in: {mounted_paths}"
+    assert "/mcp" not in mounted_paths, "MCP endpoint should not be mounted at the app root"
