@@ -1,5 +1,6 @@
 import json
 import httpx
+from contextlib import asynccontextmanager
 from typing import Dict, Optional, Any, List, Union, Literal, Sequence
 from typing_extensions import Annotated, Doc
 
@@ -354,6 +355,34 @@ class FastApiMCP:
         self._register_mcp_endpoints_http(router, http_transport, mount_path, dependencies)
         self._setup_auth()
         self._http_transport = http_transport  # Store reference
+
+        # Wrap the main FastAPI app's lifespan to include the MCP session
+        # manager lifecycle.  We cannot use add_event_handler() here because
+        # when the user has already passed lifespan= to FastAPI(), Starlette
+        # stores that function as `lifespan_context` and completely bypasses
+        # on_startup / on_shutdown handlers.  Wrapping lifespan_context works
+        # for both cases:
+        #   • No custom lifespan: wraps Starlette's _DefaultLifespan, which
+        #     still calls on_startup / on_shutdown handlers as expected.
+        #   • Custom lifespan:   wraps the user's context manager so the
+        #     session manager starts after user resources are initialised
+        #     and stops before they are torn down.
+        _main_router = self.fastapi.router
+        _original_lifespan = _main_router.lifespan_context
+        _transport = http_transport  # capture for closure
+
+        @asynccontextmanager
+        async def _mcp_lifespan(app: Any):
+            # Run user startup first so their resources (DB, cache …) are
+            # available when the MCP session manager begins accepting clients.
+            async with _original_lifespan(app) as state:
+                await _transport.startup()
+                try:
+                    yield state
+                finally:
+                    await _transport.shutdown()
+
+        _main_router.lifespan_context = _mcp_lifespan
 
         # HACK: If we got a router and not a FastAPI instance, we need to re-include the router so that
         # FastAPI will pick up the new routes we added. The problem with this approach is that we assume
