@@ -1,5 +1,6 @@
 import json
 import httpx
+import jsonschema
 from typing import Dict, Optional, Any, List, Union, Literal, Sequence
 from typing_extensions import Annotated, Doc
 
@@ -141,22 +142,10 @@ class FastApiMCP:
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
 
-        mcp_server: Server = Server(self.name, self.description)
-
-        @mcp_server.list_tools()
-        async def handle_list_tools() -> List[types.Tool]:
-            return self.tools
-
-        @mcp_server.call_tool()
-        async def handle_call_tool(
-            name: str, arguments: Dict[str, Any]
-        ) -> List[Union[types.TextContent, types.ImageContent, types.EmbeddedResource]]:
-            # Extract HTTP request info from MCP context
+        def _extract_http_request_info(request_context: Any) -> Optional[HTTPRequestInfo]:
+            """Extract HTTP request info from an MCP request context, if present."""
             http_request_info = None
             try:
-                # Access the MCP server's request context to get the original HTTP Request
-                request_context = mcp_server.request_context
-
                 if request_context and hasattr(request_context, "request"):
                     http_request = request_context.request
 
@@ -174,13 +163,86 @@ class FastApiMCP:
                         )
             except (LookupError, AttributeError) as e:
                 logger.error(f"Could not extract HTTP request info from context: {e}")
+            return http_request_info
 
-            return await self._execute_api_tool(
-                client=self._http_client,
-                tool_name=name,
-                arguments=arguments,
-                operation_map=self.operation_map,
-                http_request_info=http_request_info,
+        if hasattr(Server, "list_tools"):
+            # mcp 1.x: register tool handlers via decorators
+            mcp_server: Server = Server(
+                self.name,
+                version=self.fastapi.version,
+                instructions=self.description,
+            )
+
+            @mcp_server.list_tools()
+            async def handle_list_tools() -> List[types.Tool]:
+                return self.tools
+
+            @mcp_server.call_tool()
+            async def handle_call_tool(
+                name: str, arguments: Dict[str, Any]
+            ) -> List[Union[types.TextContent, types.ImageContent, types.EmbeddedResource]]:
+                # Extract HTTP request info from MCP context
+                http_request_info = _extract_http_request_info(mcp_server.request_context)
+
+                return await self._execute_api_tool(
+                    client=self._http_client,
+                    tool_name=name,
+                    arguments=arguments,
+                    operation_map=self.operation_map,
+                    http_request_info=http_request_info,
+                )
+
+        else:
+            # mcp 2.x: the decorator API was removed — handlers are registered
+            # via constructor callbacks, receive the request context explicitly,
+            # and must return a CallToolResult instead of a content list.
+            async def handle_list_tools(context: Any, params: Any) -> types.ListToolsResult:
+                return types.ListToolsResult(tools=self.tools)
+
+            async def handle_call_tool(context: Any, params: Any) -> types.CallToolResult:
+                # Mirror mcp 1.x's call_tool contract: validate the arguments
+                # against the tool's JSON schema and turn handler exceptions
+                # into error results, not protocol errors.
+                tool = next((t for t in self.tools if t.name == params.name), None)
+                if tool is not None:
+                    schema = getattr(tool, "inputSchema", None)
+                    if schema is None:
+                        schema = getattr(tool, "input_schema", None)
+                    if schema is not None:
+                        try:
+                            jsonschema.validate(instance=params.arguments or {}, schema=schema)
+                        except jsonschema.ValidationError as e:
+                            return types.CallToolResult(
+                                content=[types.TextContent(type="text", text=f"Input validation error: {e.message}")],
+                                is_error=True,
+                            )
+
+                # Extract HTTP request info from the per-request context
+                http_request_info = _extract_http_request_info(context)
+
+                try:
+                    result = await self._execute_api_tool(
+                        client=self._http_client,
+                        tool_name=params.name,
+                        arguments=params.arguments,
+                        operation_map=self.operation_map,
+                        http_request_info=http_request_info,
+                    )
+                except Exception as exc:
+                    # Mirror mcp 1.x's call_tool contract: handler exceptions
+                    # become error results, not protocol errors.
+                    return types.CallToolResult(
+                        content=[types.TextContent(type="text", text=str(exc))],
+                        is_error=True,
+                    )
+                return types.CallToolResult(content=list(result))
+
+            mcp_server: Server = Server(
+                self.name,
+                version=self.fastapi.version,
+                instructions=self.description,
+                on_list_tools=handle_list_tools,
+                on_call_tool=handle_call_tool,
             )
 
         self.server = mcp_server

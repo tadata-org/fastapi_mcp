@@ -3,6 +3,7 @@ from fastapi.openapi.utils import get_openapi
 import mcp.types as types
 
 from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
+from ._mcp_compat import tool_input_schema
 from fastapi_mcp.openapi.utils import (
     clean_schema_for_display,
     generate_example_from_schema,
@@ -32,7 +33,7 @@ def test_simple_app_conversion(simple_fastapi_app: FastAPI):
         assert isinstance(tool, types.Tool)
         assert tool.name in expected_operations
         assert tool.description is not None
-        assert tool.inputSchema is not None
+        assert tool_input_schema(tool) is not None
 
 
 def test_complex_app_conversion(complex_fastapi_app: FastAPI):
@@ -57,7 +58,7 @@ def test_complex_app_conversion(complex_fastapi_app: FastAPI):
         assert isinstance(tool, types.Tool)
         assert tool.name in expected_operations
         assert tool.description is not None
-        assert tool.inputSchema is not None
+        assert tool_input_schema(tool) is not None
 
 
 def test_describe_full_response_schema(simple_fastapi_app: FastAPI):
@@ -171,7 +172,7 @@ def test_parameter_handling(complex_fastapi_app: FastAPI):
 
     list_products_tool = next(tool for tool in tools if tool.name == "list_products")
 
-    properties = list_products_tool.inputSchema["properties"]
+    properties = tool_input_schema(list_products_tool)["properties"]
 
     assert "product_id" not in properties  # This is from get_product, not list_products
 
@@ -206,7 +207,7 @@ def test_parameter_handling(complex_fastapi_app: FastAPI):
     assert "tag" in properties
     assert properties["tag"].get("type") == "array"
 
-    required = list_products_tool.inputSchema.get("required", [])
+    required = tool_input_schema(list_products_tool).get("required", [])
     assert "page" not in required  # Has default value
     assert "category" not in required  # Optional parameter
 
@@ -215,14 +216,14 @@ def test_parameter_handling(complex_fastapi_app: FastAPI):
     assert operation_map["list_products"]["method"] == "get"
 
     get_product_tool = next(tool for tool in tools if tool.name == "get_product")
-    get_product_props = get_product_tool.inputSchema["properties"]
+    get_product_props = tool_input_schema(get_product_tool)["properties"]
 
     assert "product_id" in get_product_props
     assert get_product_props["product_id"].get("type") == "string"  # UUID converted to string
     assert "description" in get_product_props["product_id"]
 
     get_customer_tool = next(tool for tool in tools if tool.name == "get_customer")
-    get_customer_props = get_customer_tool.inputSchema["properties"]
+    get_customer_props = tool_input_schema(get_customer_tool)["properties"]
 
     assert "fields" in get_customer_props
     assert get_customer_props["fields"].get("type") == "array"
@@ -247,7 +248,7 @@ def test_request_body_handling(complex_fastapi_app: FastAPI):
 
     create_order_tool = next(tool for tool in tools if tool.name == "create_order")
 
-    properties = create_order_tool.inputSchema["properties"]
+    properties = tool_input_schema(create_order_tool)["properties"]
 
     assert "customer_id" in properties
     assert "items" in properties
@@ -268,7 +269,7 @@ def test_request_body_handling(complex_fastapi_app: FastAPI):
             assert "default" in properties[param_name]
             assert properties[param_name]["default"] == original_properties[param_name]["default"]
 
-    required = create_order_tool.inputSchema.get("required", [])
+    required = tool_input_schema(create_order_tool).get("required", [])
     assert "customer_id" in required
     assert "items" in required
     assert "shipping_address_id" in required
@@ -321,7 +322,7 @@ def test_missing_type_handling(complex_fastapi_app: FastAPI):
     tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
 
     get_product_tool = next(tool for tool in tools if tool.name == "get_product")
-    get_product_props = get_product_tool.inputSchema["properties"]
+    get_product_props = tool_input_schema(get_product_tool)["properties"]
 
     assert "product_id" in get_product_props
     assert get_product_props["product_id"].get("type") == "string"  # Default type applied
@@ -353,7 +354,7 @@ def test_body_params_descriptions_and_defaults(complex_fastapi_app: FastAPI):
     tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
 
     create_order_tool = next(tool for tool in tools if tool.name == "create_order")
-    properties = create_order_tool.inputSchema["properties"]
+    properties = tool_input_schema(create_order_tool)["properties"]
 
     assert "description" in properties["customer_id"]
     assert properties["customer_id"]["description"] == "Test customer ID description"
@@ -409,7 +410,7 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
 
     create_order_tool = next(tool for tool in tools if tool.name == "create_order")
-    properties = create_order_tool.inputSchema["properties"]
+    properties = tool_input_schema(create_order_tool)["properties"]
 
     assert "customer_id" in properties
     assert "title" in properties["customer_id"]

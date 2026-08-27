@@ -3,7 +3,7 @@ import json
 import pytest
 import mcp.types as types
 from mcp.server.lowlevel import Server
-from mcp.shared.memory import create_connected_server_and_client_session
+from ._mcp_compat import call_result_is_error, create_connected_server_and_client_session
 from fastapi import FastAPI
 
 from fastapi_mcp import FastApiMCP
@@ -58,7 +58,7 @@ async def test_call_tool_get_item_1(lowlevel_server_simple_app: Server):
     async with create_connected_server_and_client_session(lowlevel_server_simple_app) as client_session:
         response = await client_session.call_tool("get_item", {"item_id": 1})
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -76,7 +76,7 @@ async def test_call_tool_get_item_2(lowlevel_server_simple_app: Server):
     async with create_connected_server_and_client_session(lowlevel_server_simple_app) as client_session:
         response = await client_session.call_tool("get_item", {"item_id": 2})
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -94,7 +94,7 @@ async def test_call_tool_raise_error(lowlevel_server_simple_app: Server):
     async with create_connected_server_and_client_session(lowlevel_server_simple_app) as client_session:
         response = await client_session.call_tool("raise_error", {})
 
-        assert response.isError
+        assert call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -107,7 +107,7 @@ async def test_error_handling(lowlevel_server_simple_app: Server):
     async with create_connected_server_and_client_session(lowlevel_server_simple_app) as client_session:
         response = await client_session.call_tool("get_item", {})
 
-        assert response.isError
+        assert call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -128,7 +128,7 @@ async def test_complex_tool_arguments(lowlevel_server_simple_app: Server):
     async with create_connected_server_and_client_session(lowlevel_server_simple_app) as client_session:
         response = await client_session.call_tool("create_item", test_item)
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -145,7 +145,7 @@ async def test_call_tool_list_items_default(lowlevel_server_simple_app: Server):
     async with create_connected_server_and_client_session(lowlevel_server_simple_app) as client_session:
         response = await client_session.call_tool("list_items", {})
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -163,7 +163,7 @@ async def test_call_tool_list_items_with_pagination(lowlevel_server_simple_app: 
     async with create_connected_server_and_client_session(lowlevel_server_simple_app) as client_session:
         response = await client_session.call_tool("list_items", {"skip": 1, "limit": 1})
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -181,7 +181,7 @@ async def test_call_tool_get_item_not_found(lowlevel_server_simple_app: Server):
     async with create_connected_server_and_client_session(lowlevel_server_simple_app) as client_session:
         response = await client_session.call_tool("get_item", {"item_id": 999})
 
-        assert response.isError
+        assert call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -203,7 +203,7 @@ async def test_call_tool_update_item(lowlevel_server_simple_app: Server):
     async with create_connected_server_and_client_session(lowlevel_server_simple_app) as client_session:
         response = await client_session.call_tool("update_item", test_update)
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -221,7 +221,7 @@ async def test_call_tool_delete_item(lowlevel_server_simple_app: Server):
     async with create_connected_server_and_client_session(lowlevel_server_simple_app) as client_session:
         response = await client_session.call_tool("delete_item", {"item_id": 3})
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         # The endpoint returns 204 No Content, so we expect an empty response
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
         assert (
@@ -234,7 +234,7 @@ async def test_call_tool_get_item_with_details(lowlevel_server_simple_app: Serve
     async with create_connected_server_and_client_session(lowlevel_server_simple_app) as client_session:
         response = await client_session.call_tool("get_item", {"item_id": 1, "include_details": True})
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -375,7 +375,7 @@ async def test_context_extraction_in_tool_handler(fastapi_mcp: FastApiMCP):
     """Test that handle_call_tool extracts HTTP request info from MCP context."""
     from unittest.mock import patch, MagicMock
     import mcp.types as types
-    from mcp.server.lowlevel.server import request_ctx
+    from mcp.server.lowlevel import Server
 
     # Create a fake HTTP request object with headers
     fake_http_request = MagicMock()
@@ -389,55 +389,56 @@ async def test_context_extraction_in_tool_handler(fastapi_mcp: FastApiMCP):
     fake_request_context = MagicMock()
     fake_request_context.request = fake_http_request
 
-    # Test with authorization header extraction from context
-    token = request_ctx.set(fake_request_context)
-    try:
+    call_request = types.CallToolRequest(
+        method="tools/call", params=types.CallToolRequestParams(name="get_item", arguments={"item_id": 1})
+    )
+
+    async def invoke_tool_handler(with_context: bool):
+        """Dispatch a tools/call request straight into the lowlevel handler."""
         with patch.object(fastapi_mcp, "_execute_api_tool") as mock_execute:
             mock_execute.return_value = [types.TextContent(type="text", text="success")]
 
-            # Create a CallToolRequest like the MCP protocol would
-            call_request = types.CallToolRequest(
-                method="tools/call", params=types.CallToolRequestParams(name="get_item", arguments={"item_id": 1})
-            )
-
             try:
-                # Call the tool handler directly like the MCP server would
-                await fastapi_mcp.server.request_handlers[types.CallToolRequest](call_request)
+                if hasattr(Server, "list_tools"):
+                    # mcp 1.x: handlers are dispatched from request_handlers and read
+                    # the request context from the request_ctx ContextVar.
+                    from mcp.server.lowlevel.server import request_ctx
+
+                    token = request_ctx.set(fake_request_context if with_context else None)
+                    try:
+                        await fastapi_mcp.server.request_handlers[types.CallToolRequest](call_request)
+                    finally:
+                        request_ctx.reset(token)
+                else:
+                    # mcp 2.x: the request context is passed to the handler explicitly.
+                    entry = fastapi_mcp.server._request_handlers["tools/call"]
+                    context = fake_request_context if with_context else MagicMock(spec=[])
+                    await entry.handler(context, call_request.params)
             except Exception:
                 pass
 
-            assert mock_execute.called, "The _execute_api_tool method was not called"
+            return mock_execute
 
-            if mock_execute.called:
-                # Verify that HTTPRequestInfo was extracted from context and passed to _execute_api_tool
-                http_request_info = mock_execute.call_args.kwargs["http_request_info"]
-                assert http_request_info is not None, "HTTPRequestInfo should be extracted from context"
-                assert http_request_info.method == "POST"
-                assert http_request_info.path == "/test"
-                assert "Authorization" in http_request_info.headers
-                assert http_request_info.headers["Authorization"] == "Bearer token-123"
-                assert "X-Custom" in http_request_info.headers
-                assert http_request_info.headers["X-Custom"] == "custom-value-123"
-    finally:
-        # Clean up the context variable
-        request_ctx.reset(token)
+    # Test with authorization header extraction from context
+    mock_execute = await invoke_tool_handler(with_context=True)
+
+    assert mock_execute.called, "The _execute_api_tool method was not called"
+
+    # Verify that HTTPRequestInfo was extracted from context and passed to _execute_api_tool
+    http_request_info = mock_execute.call_args.kwargs["http_request_info"]
+    assert http_request_info is not None, "HTTPRequestInfo should be extracted from context"
+    assert http_request_info.method == "POST"
+    assert http_request_info.path == "/test"
+    assert "Authorization" in http_request_info.headers
+    assert http_request_info.headers["Authorization"] == "Bearer token-123"
+    assert "X-Custom" in http_request_info.headers
+    assert http_request_info.headers["X-Custom"] == "custom-value-123"
 
     # Test with missing request context (should still work but with None)
-    with patch.object(fastapi_mcp, "_execute_api_tool") as mock_execute:
-        mock_execute.return_value = [types.TextContent(type="text", text="success")]
+    mock_execute = await invoke_tool_handler(with_context=False)
 
-        call_request = types.CallToolRequest(
-            method="tools/call", params=types.CallToolRequestParams(name="get_item", arguments={"item_id": 1})
-        )
+    assert mock_execute.called, "The _execute_api_tool method was not called"
 
-        try:
-            await fastapi_mcp.server.request_handlers[types.CallToolRequest](call_request)
-        except Exception:
-            pass
-
-        assert mock_execute.called, "The _execute_api_tool method was not called"
-
-        if mock_execute.called:
-            # Verify that HTTPRequestInfo is None when context is not available
-            http_request_info = mock_execute.call_args.kwargs["http_request_info"]
-            assert http_request_info is None, "HTTPRequestInfo should be None when context is not available"
+    # Verify that HTTPRequestInfo is None when context is not available
+    http_request_info = mock_execute.call_args.kwargs["http_request_info"]
+    assert http_request_info is None, "HTTPRequestInfo should be None when context is not available"

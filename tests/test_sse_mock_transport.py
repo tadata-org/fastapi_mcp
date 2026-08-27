@@ -7,8 +7,9 @@ from mcp.shared.message import SessionMessage
 from pydantic import ValidationError
 from anyio.streams.memory import MemoryObjectSendStream
 
-from fastapi_mcp.transport.sse import FastApiSseTransport
-from mcp.types import JSONRPCMessage, JSONRPCError
+from fastapi_mcp.transport.sse import FastApiSseTransport, _JSONRPC_MESSAGE_ADAPTER
+from ._mcp_compat import jsonrpc_message_root
+from mcp.types import JSONRPCError
 
 
 @pytest.fixture
@@ -118,11 +119,12 @@ async def test_handle_post_message_general_exception(
 
     # Instead of mocking the body method to raise an exception,
     # we'll patch the body method to return a normal value and then
-    # patch JSONRPCMessage.model_validate_json to raise the exception
+    # make the JSON-RPC message parsing raise the exception
     mock_request.body = AsyncMock(return_value=b'{"jsonrpc": "2.0", "method": "test", "id": "1"}')
 
-    # Mock the model_validate_json method to raise an Exception
-    with patch("mcp.types.JSONRPCMessage.model_validate_json", side_effect=Exception("Test exception")):
+    # Mock the JSON-RPC message parsing to raise an Exception. The transport
+    # always parses via _JSONRPC_MESSAGE_ADAPTER (works on mcp 1.x and 2.x).
+    with patch("fastapi_mcp.transport.sse._JSONRPC_MESSAGE_ADAPTER.validate_json", side_effect=Exception("Test exception")):
         # Check that the function raises HTTPException with the correct status code
         with pytest.raises(HTTPException) as excinfo:
             await mock_transport.handle_fastapi_post_message(mock_request)
@@ -147,9 +149,8 @@ async def test_send_message_safely_with_validation_error(
     assert mock_writer.send.called
     sent_message = mock_writer.send.call_args[0][0]
     assert isinstance(sent_message, SessionMessage)
-    assert isinstance(sent_message.message, JSONRPCMessage)
-    assert isinstance(sent_message.message.root, JSONRPCError)
-    assert sent_message.message.root.error.code == -32700  # Parse error code
+    assert isinstance(jsonrpc_message_root(sent_message.message), JSONRPCError)
+    assert jsonrpc_message_root(sent_message.message).error.code == -32700  # Parse error code
 
 
 @pytest.mark.anyio
@@ -158,9 +159,7 @@ async def test_send_message_safely_with_jsonrpc_message(
 ) -> None:
     """Test sending a JSONRPCMessage safely."""
     # Create a JSONRPCMessage
-    message = SessionMessage(
-        JSONRPCMessage.model_validate({"jsonrpc": "2.0", "id": "123", "method": "test_method", "params": {}})
-    )
+    message = SessionMessage(_JSONRPC_MESSAGE_ADAPTER.validate_python({"jsonrpc": "2.0", "id": "123", "method": "test_method", "params": {}}))
 
     # Call the function
     await mock_transport._send_message_safely(mock_writer, message)
@@ -181,7 +180,7 @@ async def test_send_message_safely_exception_handling(
 
     # Create a message
     message = SessionMessage(
-        JSONRPCMessage.model_validate({"jsonrpc": "2.0", "id": "123", "method": "test_method", "params": {}})
+        _JSONRPC_MESSAGE_ADAPTER.validate_python({"jsonrpc": "2.0", "id": "123", "method": "test_method", "params": {}})
     )
 
     # Call the function - it should not raise an exception

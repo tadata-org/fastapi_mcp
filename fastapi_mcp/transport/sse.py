@@ -6,12 +6,17 @@ from anyio.streams.memory import MemoryObjectSendStream
 from fastapi import Request, Response, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
 from mcp.shared.message import SessionMessage, ServerMessageMetadata
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from mcp.server.sse import SseServerTransport
 from mcp.types import JSONRPCMessage, JSONRPCError, ErrorData
 
 
 logger = logging.getLogger(__name__)
+
+# mcp 1.x exposes JSONRPCMessage as a RootModel; mcp 2.x models it as a plain
+# Union type without classmethods like model_validate_json. A TypeAdapter
+# handles both shapes uniformly.
+_JSONRPC_MESSAGE_ADAPTER = TypeAdapter(JSONRPCMessage)
 
 
 class FastApiSseTransport(SseServerTransport):
@@ -57,7 +62,7 @@ class FastApiSseTransport(SseServerTransport):
         logger.debug(f"Received JSON: {body.decode()}")
 
         try:
-            message = JSONRPCMessage.model_validate_json(body)
+            message = _JSONRPC_MESSAGE_ADAPTER.validate_json(body)
 
             logger.debug(f"Validated client message: {message}")
         except ValidationError as err:
@@ -104,7 +109,7 @@ class FastApiSseTransport(SseServerTransport):
                     id="unknown",  # We don't know the ID from the invalid request
                     error=error_data,
                 )
-                error_message = SessionMessage(JSONRPCMessage(root=json_rpc_error))
+                error_message = SessionMessage(_JSONRPC_MESSAGE_ADAPTER.validate_python(json_rpc_error))
                 await writer.send(error_message)
             else:
                 await writer.send(message)

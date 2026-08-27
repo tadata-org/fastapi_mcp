@@ -3,7 +3,7 @@ import json
 import pytest
 import mcp.types as types
 from mcp.server.lowlevel import Server
-from mcp.shared.memory import create_connected_server_and_client_session
+from ._mcp_compat import call_result_is_error, create_connected_server_and_client_session
 from fastapi import FastAPI
 
 from fastapi_mcp import FastApiMCP
@@ -45,7 +45,7 @@ async def test_call_tool_list_products_default(lowlevel_server_complex_app: Serv
     async with create_connected_server_and_client_session(lowlevel_server_complex_app) as client_session:
         response = await client_session.call_tool("list_products", {})
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -65,7 +65,7 @@ async def test_call_tool_list_products_with_filters(lowlevel_server_complex_app:
             {"category": "electronics", "min_price": 10.0, "page": 1, "size": 10, "in_stock_only": True},
         )
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -83,7 +83,7 @@ async def test_call_tool_get_product(lowlevel_server_complex_app: Server, exampl
     async with create_connected_server_and_client_session(lowlevel_server_complex_app) as client_session:
         response = await client_session.call_tool("get_product", {"product_id": product_id})
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -104,7 +104,7 @@ async def test_call_tool_get_product_with_options(lowlevel_server_complex_app: S
             "get_product", {"product_id": product_id, "include_unavailable": True}
         )
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -129,7 +129,7 @@ async def test_call_tool_create_order(lowlevel_server_complex_app: Server, examp
     async with create_connected_server_and_client_session(lowlevel_server_complex_app) as client_session:
         response = await client_session.call_tool("create_order", order_request)
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -155,7 +155,7 @@ async def test_call_tool_create_order_validation_error(lowlevel_server_complex_a
     async with create_connected_server_and_client_session(lowlevel_server_complex_app) as client_session:
         response = await client_session.call_tool("create_order", order_request)
 
-        assert response.isError
+        assert call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -169,7 +169,7 @@ async def test_call_tool_get_customer(lowlevel_server_complex_app: Server, examp
     async with create_connected_server_and_client_session(lowlevel_server_complex_app) as client_session:
         response = await client_session.call_tool("get_customer", {"customer_id": customer_id})
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -195,7 +195,7 @@ async def test_call_tool_get_customer_with_options(lowlevel_server_complex_app: 
             },
         )
 
-        assert not response.isError
+        assert not call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
@@ -210,7 +210,7 @@ async def test_error_handling_missing_parameter(lowlevel_server_complex_app: Ser
         # Missing required product_id parameter
         response = await client_session.call_tool("get_product", {})
 
-        assert response.isError
+        assert call_result_is_error(response)
         assert len(response.content) > 0
 
         text_content = next(c for c in response.content if isinstance(c, types.TextContent))
