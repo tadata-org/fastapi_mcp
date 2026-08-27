@@ -244,7 +244,7 @@ def setup_oauth_fake_dynamic_register_endpoint(
     But, this is an overcomplication for most use cases.
 
     So instead of actually implementing dynamic client registration, we just echo back the pre-registered
-    client ID and secret.
+    client ID and register the caller as a public client.
 
     Use this if you don't need dynamic client registration, or if your OAuth provider doesn't support it.
     """
@@ -252,15 +252,15 @@ def setup_oauth_fake_dynamic_register_endpoint(
     @app.post(
         path,
         response_model=ClientRegistrationResponse,
+        response_model_exclude_none=True,
         include_in_schema=include_in_schema,
     )
     async def oauth_register_proxy(request: ClientRegistrationRequest) -> ClientRegistrationResponse:
         client_response = ClientRegistrationResponse(
             client_name=request.client_name or "MCP Server",  # Name doesn't really affect functionality
             client_id=client_id,
-            client_secret=client_secret,
             redirect_uris=request.redirect_uris,  # Just echo back their requested URIs
             grant_types=request.grant_types or ["authorization_code"],
-            token_endpoint_auth_method=request.token_endpoint_auth_method or "none",
+            token_endpoint_auth_method="none",
         )
         return client_response
