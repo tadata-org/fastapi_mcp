@@ -57,6 +57,22 @@ def resolve_schema_references(schema_part: Dict[str, Any], reference_schema: Dic
     return schema_part
 
 
+def _hoist_array_fields_from_composition(schema: Dict[str, Any]) -> None:
+    """Copy array `items` (and `type`) from anyOf/oneOf variants before composition keys are removed."""
+    for composition_key in ("anyOf", "oneOf"):
+        variants = schema.get(composition_key)
+        if not isinstance(variants, list):
+            continue
+
+        for variant in variants:
+            if not isinstance(variant, dict) or variant.get("type") != "array":
+                continue
+            if "items" in variant and "items" not in schema:
+                schema["items"] = variant["items"]
+            schema.setdefault("type", "array")
+            break
+
+
 def clean_schema_for_display(schema: Dict[str, Any]) -> Dict[str, Any]:
     """
     Clean up a schema for display by removing internal fields.
@@ -69,6 +85,8 @@ def clean_schema_for_display(schema: Dict[str, Any]) -> Dict[str, Any]:
     """
     # Make a copy to avoid modifying the input schema
     schema = schema.copy()
+
+    _hoist_array_fields_from_composition(schema)
 
     # Remove common internal fields that are not helpful for LLMs
     fields_to_remove = [
