@@ -19,6 +19,10 @@ def test_create_mcp_server(simple_fastapi_app: FastAPI):
     assert len(mcp.tools) > 0, "Should have extracted tools from the app"
     assert len(mcp.operation_map) > 0, "Should have operation mapping"
 
+    assert mcp.server.version == simple_fastapi_app.version
+    assert mcp.server.instructions == "Test description"
+    assert mcp.server.version != mcp.server.instructions
+
     # Check that the operation map contains all expected operations from simple_app
     expected_operations = ["list_items", "get_item", "create_item", "update_item", "delete_item", "raise_error"]
     for op in expected_operations:
