@@ -8,11 +8,12 @@ import sys
 import threading
 import coverage
 from typing import AsyncGenerator, Generator
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from fastapi.routing import APIRoute
 import pytest
 import httpx
 import uvicorn
-from fastapi_mcp import FastApiMCP
+from fastapi_mcp import FastApiMCP, AuthConfig
 import mcp.types as types
 
 
@@ -59,6 +60,7 @@ def run_server(server_port: int, fastapi_app: FastAPI) -> None:
         fastapi_app,
         name=SERVER_NAME,
         description="Test description",
+        auth_config=AuthConfig(dependencies=[Depends(lambda: None)]),
     )
     mcp.mount_http()
 
@@ -476,3 +478,29 @@ async def test_http_notification_handling(http_client: httpx.AsyncClient, server
     assert response.status_code == 202
     # Notifications should return empty body
     assert response.content == b"" or response.text == "null"
+
+
+def test_http_fails_closed_without_auth_config(simple_fastapi_app: FastAPI) -> None:
+    mcp = FastApiMCP(simple_fastapi_app)
+    mcp.mount_http()
+
+    route = next(route for route in simple_fastapi_app.routes if isinstance(route, APIRoute) and route.path == "/mcp")
+    assert route.dependant.dependencies
+
+
+@pytest.mark.anyio
+async def test_http_rejects_unauthenticated_request(simple_fastapi_app: FastAPI) -> None:
+    mcp = FastApiMCP(simple_fastapi_app)
+    mcp.mount_http()
+
+    transport = httpx.ASGITransport(app=simple_fastapi_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "method": "tools/list", "id": 1},
+            headers={"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert "Authentication required" in response.json()["detail"]
