@@ -13,6 +13,11 @@ import pytest
 import httpx
 import uvicorn
 from fastapi_mcp import FastApiMCP
+
+pytestmark = pytest.mark.skipif(
+    os.name == "nt",
+    reason="real-transport tests spawn the server subprocess via os.fork(), which is unavailable on Windows; run on Linux/CI",
+)
 import mcp.types as types
 
 
@@ -87,11 +92,11 @@ def server(request: pytest.FixtureRequest) -> Generator[str, None, None]:
         s.bind((HOST, 0))
         server_port = s.getsockname()[1]
 
-    # Use fork method to avoid pickling issues
-    ctx = multiprocessing.get_context("fork")
-
-    # Run the server in a subprocess
+    # Run the server in a forked subprocess (fork shares memory with the
+    # child, avoiding pickling of the FastAPI app). POSIX only - on Windows
+    # these tests are skipped via the module-level pytestmark.
     fastapi_app = request.getfixturevalue(request.param)
+    ctx = multiprocessing.get_context("fork")
     proc = ctx.Process(
         target=run_server,
         kwargs={"server_port": server_port, "fastapi_app": fastapi_app},
