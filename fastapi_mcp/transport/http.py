@@ -29,6 +29,7 @@ class FastApiHttpSessionManager:
         self._manager_task: asyncio.Task | None = None
         self._manager_started = False
         self._startup_lock = asyncio.Lock()
+        self._ready_event: asyncio.Event | None = None
 
     async def _ensure_session_manager_started(self) -> None:
         """
@@ -57,10 +58,16 @@ class FastApiHttpSessionManager:
                 security_settings=self.security_settings,
             )
 
-            # Start the session manager in a background task
+            # Start the session manager in a background task and wait until its
+            # task group is initialized. A fixed sleep is unreliable and can
+            # allow requests before the message router is ready (#259).
+            ready_event = asyncio.Event()
+            self._ready_event = ready_event
+
             async def run_session_manager():
                 try:
                     async with self._session_manager.run():
+                        ready_event.set()
                         logger.info("StreamableHTTP session manager is running")
                         # Keep running until cancelled
                         await asyncio.Event().wait()
@@ -68,14 +75,16 @@ class FastApiHttpSessionManager:
                     logger.info("StreamableHTTP session manager is shutting down")
                     raise
                 except Exception:
+                    if not ready_event.is_set():
+                        ready_event.set()
                     logger.exception("Error in StreamableHTTP session manager")
                     raise
 
             self._manager_task = asyncio.create_task(run_session_manager())
+            await ready_event.wait()
+            if self._manager_task.done():
+                self._manager_task.result()
             self._manager_started = True
-
-            # Give the session manager a moment to initialize
-            await asyncio.sleep(0.1)
 
     async def handle_fastapi_request(self, request: Request) -> Response:
         """
@@ -134,3 +143,4 @@ class FastApiHttpSessionManager:
             except asyncio.CancelledError:
                 pass
         self._manager_started = False
+        self._ready_event = None
