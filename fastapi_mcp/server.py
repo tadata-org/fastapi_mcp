@@ -3,7 +3,7 @@ import httpx
 from typing import Dict, Optional, Any, List, Union, Literal, Sequence
 from typing_extensions import Annotated, Doc
 
-from fastapi import FastAPI, Request, APIRouter, params
+from fastapi import FastAPI, Request, APIRouter, params, HTTPException, Depends
 from fastapi.openapi.utils import get_openapi
 from mcp.server.lowlevel.server import Server
 import mcp.types as types
@@ -309,6 +309,17 @@ class FastApiMCP:
         else:
             logger.info("No auth config provided, skipping auth setup")
 
+    @staticmethod
+    def _fail_closed_auth_dependency():
+        async def require_auth() -> None:
+            raise HTTPException(
+                status_code=401,
+                detail="Authentication required. Configure AuthConfig before exposing MCP tools over HTTP.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        return Depends(require_auth)
+
     def mount_http(
         self,
         router: Annotated[
@@ -349,7 +360,7 @@ class FastApiMCP:
         assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
 
         http_transport = FastApiHttpSessionManager(mcp_server=self.server)
-        dependencies = self._auth_config.dependencies if self._auth_config else None
+        dependencies = self._auth_config.dependencies if self._auth_config else [self._fail_closed_auth_dependency()]
 
         self._register_mcp_endpoints_http(router, http_transport, mount_path, dependencies)
         self._setup_auth()
