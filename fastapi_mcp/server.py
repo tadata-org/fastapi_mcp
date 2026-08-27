@@ -309,6 +309,117 @@ class FastApiMCP:
         else:
             logger.info("No auth config provided, skipping auth setup")
 
+    def _resolve_include_prefix_from_metadata(self, router: APIRouter) -> List[str]:
+        """
+        Resolve the `include_router(router, prefix=...)` prefix using FastAPI's own
+        include-time bookkeeping (FastAPI >= 0.137, Starlette's `_IncludedRouter`).
+
+        Since FastAPI 0.137.0, `app.include_router()` no longer flattens a sub-router's
+        routes into `app.routes`; instead it appends one `_IncludedRouter` object per
+        `include_router()` call that carries `.original_router` (the router instance
+        that was included) and `.include_context.prefix` (the prefix it was included
+        under). Matching on `.original_router is router` identity is exact -- unlike
+        diffing paths, it works even when `router` has zero routes of its own, and it
+        cannot be confused by two different routers sharing the same endpoint function.
+
+        Returns one prefix string per matching inclusion (usually zero or one; more
+        than one means `router` was `include_router`-ed more than once under different
+        prefixes). Returns an empty list on FastAPI < 0.137, where `app.routes` has no
+        such per-inclusion record at all.
+        """
+        prefixes = []
+        for app_route in self.fastapi.routes:
+            if getattr(app_route, "original_router", None) is not router:
+                continue
+            include_context = getattr(app_route, "include_context", None)
+            prefix = getattr(include_context, "prefix", None)
+            if prefix is not None:
+                prefixes.append(prefix)
+        return prefixes
+
+    def _resolve_include_prefix_by_diff(self, router: APIRouter) -> List[str]:
+        """
+        Resolve the `include_router(router, prefix=...)` prefix by diffing `router`'s
+        own routes against their counterparts on `self.fastapi.routes` (same endpoint
+        function, same HTTP methods, path ending in the router's own route path).
+
+        Fallback for FastAPI < 0.137, where `app.include_router()` flattens sub-routes
+        directly into `app.routes` and there is no other way to recover the prefix.
+
+        Requires *every* route defined on `router` to agree on the same candidate
+        prefix before accepting it -- an endpoint function reused across two different
+        routers (or a router included more than once under different prefixes) can
+        otherwise make an unrelated prefix look like a valid match. Returns a list of
+        the distinct candidate prefixes found: empty if none of `router`'s routes could
+        be matched at all, or more than one entry if there is a genuine ambiguity.
+        """
+        own_routes = [r for r in router.routes if getattr(r, "path", None) and getattr(r, "endpoint", None) is not None]
+        if not own_routes:
+            return []
+
+        per_route_candidates = []
+        for router_route in own_routes:
+            router_path: str = getattr(router_route, "path")
+            router_endpoint = getattr(router_route, "endpoint")
+            router_methods = getattr(router_route, "methods", None)
+            matches = set()
+            for app_route in self.fastapi.routes:
+                app_path = getattr(app_route, "path", None)
+                if not app_path or not app_path.endswith(router_path):
+                    continue
+                if getattr(app_route, "endpoint", None) is not router_endpoint:
+                    continue
+                if router_methods is not None and getattr(app_route, "methods", None) != router_methods:
+                    continue
+                matches.add(app_path[: -len(router_path)])
+            if not matches:
+                return []
+            per_route_candidates.append(matches)
+
+        return sorted(set.intersection(*per_route_candidates))
+
+    def _resolve_router_include_prefix(self, router: APIRouter) -> str:
+        """
+        Resolve the prefix under which `router` was actually mounted onto `self.fastapi`.
+
+        When a router is included via `app.include_router(router, prefix="/x")` without
+        setting `prefix` on the `APIRouter()` constructor itself, that prefix is only
+        reflected on `self.fastapi`'s route table -- the router object's own `.prefix`
+        attribute stays empty. Tries the exact, identity-based resolution first
+        (FastAPI >= 0.137) and falls back to diffing route paths (FastAPI < 0.137).
+
+        Returns an empty string, and logs a warning, if no prefix could be resolved
+        unambiguously -- e.g. the router hasn't been included into the app yet, or (on
+        FastAPI < 0.137 only) it has no routes of its own to diff against. This
+        preserves the previous behavior of relying solely on `router.prefix` rather
+        than risk mounting under the wrong prefix.
+        """
+        prefixes = self._resolve_include_prefix_from_metadata(router)
+        if not prefixes:
+            prefixes = self._resolve_include_prefix_by_diff(router)
+
+        if not prefixes:
+            logger.warning(
+                f"Could not determine the prefix that {router!r} was included under. "
+                "Mounting at the router's own prefix; if this router was included via "
+                "`app.include_router(router, prefix=...)`, make sure `include_router` is "
+                "called before `mount_http`/`mount_sse`, or set `prefix` on the "
+                "`APIRouter()` constructor directly."
+            )
+            return ""
+
+        unique_prefixes = sorted(set(prefixes))
+        if len(unique_prefixes) > 1:
+            logger.warning(
+                f"{router!r} appears to be included in the app under multiple different "
+                f"prefixes {unique_prefixes}. Could not unambiguously resolve where its "
+                "MCP endpoint should be mounted, so falling back to the router's own "
+                "prefix rather than guessing."
+            )
+            return ""
+
+        return unique_prefixes[0]
+
     def mount_http(
         self,
         router: Annotated[
@@ -336,6 +447,11 @@ class FastApiMCP:
 
         There is no requirement that the FastAPI app or APIRouter is the same as the one that the MCP
         server was created from.
+
+        If `router` is an `APIRouter`, it must already be included into the app (via
+        `app.include_router(router, ...)`) *before* calling this method -- the effective
+        mount path is resolved from the app's current route table at call time and is
+        not re-evaluated if the router is included afterwards.
         """
         # Normalize mount path
         if not mount_path.startswith("/"):
@@ -347,6 +463,9 @@ class FastApiMCP:
             router = self.fastapi
 
         assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
+
+        include_prefix = self._resolve_router_include_prefix(router) if isinstance(router, APIRouter) else ""
+        full_mount_path = mount_path if isinstance(router, FastAPI) else include_prefix + router.prefix + mount_path
 
         http_transport = FastApiHttpSessionManager(mcp_server=self.server)
         dependencies = self._auth_config.dependencies if self._auth_config else None
@@ -361,9 +480,9 @@ class FastApiMCP:
         #
         # TODO: Find a better way to do this.
         if isinstance(router, APIRouter):
-            self.fastapi.include_router(router)
+            self.fastapi.include_router(router, prefix=include_prefix)
 
-        logger.info(f"MCP HTTP server listening at {mount_path}")
+        logger.info(f"MCP HTTP server listening at {full_mount_path}")
 
     def mount_sse(
         self,
@@ -392,6 +511,11 @@ class FastApiMCP:
 
         There is no requirement that the FastAPI app or APIRouter is the same as the one that the MCP
         server was created from.
+
+        If `router` is an `APIRouter`, it must already be included into the app (via
+        `app.include_router(router, ...)`) *before* calling this method -- the effective
+        mount path is resolved from the app's current route table at call time and is
+        not re-evaluated if the router is included afterwards.
         """
         # Normalize mount path
         if not mount_path.startswith("/"):
@@ -404,7 +528,8 @@ class FastApiMCP:
 
         # Build the base path correctly for the SSE transport
         assert isinstance(router, (FastAPI, APIRouter)), f"Invalid router type: {type(router)}"
-        base_path = mount_path if isinstance(router, FastAPI) else router.prefix + mount_path
+        include_prefix = self._resolve_router_include_prefix(router) if isinstance(router, APIRouter) else ""
+        base_path = mount_path if isinstance(router, FastAPI) else include_prefix + router.prefix + mount_path
         messages_path = f"{base_path}/messages/"
 
         sse_transport = FastApiSseTransport(messages_path)
@@ -419,9 +544,9 @@ class FastApiMCP:
         #
         # TODO: Find a better way to do this.
         if isinstance(router, APIRouter):
-            self.fastapi.include_router(router)
+            self.fastapi.include_router(router, prefix=include_prefix)
 
-        logger.info(f"MCP SSE server listening at {mount_path}")
+        logger.info(f"MCP SSE server listening at {base_path}")
 
     def mount(
         self,
