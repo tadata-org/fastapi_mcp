@@ -176,16 +176,19 @@ def test_parameter_handling(complex_fastapi_app: FastAPI):
     assert "product_id" not in properties  # This is from get_product, not list_products
 
     assert "category" in properties
-    assert properties["category"].get("type") == "string"  # Enum converted to string
+    # ``ProductCategory | None`` — Pydantic emits anyOf which we now preserve
+    # (previously a sibling "type": "string" was injected, breaking null per #246).
+    assert "anyOf" in properties["category"]
+    assert "type" not in properties["category"]
     assert "description" in properties["category"]
     assert "Filter by product category" in properties["category"]["description"]
 
     assert "min_price" in properties
-    assert properties["min_price"].get("type") == "number"
+    # ``Optional[float]`` — anyOf preserved (no sibling "type" injected).
+    assert "anyOf" in properties["min_price"]
+    assert "type" not in properties["min_price"]
     assert "description" in properties["min_price"]
     assert "Minimum price filter" in properties["min_price"]["description"]
-    if "minimum" in properties["min_price"]:
-        assert properties["min_price"]["minimum"] > 0  # gt=0 in Query param
 
     assert "in_stock_only" in properties
     assert properties["in_stock_only"].get("type") == "boolean"
@@ -204,7 +207,9 @@ def test_parameter_handling(complex_fastapi_app: FastAPI):
         assert properties["size"]["maximum"] <= 100  # le=100 in Query param
 
     assert "tag" in properties
-    assert properties["tag"].get("type") == "array"
+    # ``Optional[List[str]]`` — anyOf preserved.
+    assert "anyOf" in properties["tag"]
+    assert "type" not in properties["tag"]
 
     required = list_products_tool.inputSchema.get("required", [])
     assert "page" not in required  # Has default value
@@ -416,9 +421,88 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     assert properties["customer_id"]["title"] == "customer_id"
 
     assert "notes" in properties
-    assert "type" in properties["notes"]
-    assert properties["notes"]["type"] in ["string", "object"]  # Default should be either string or object
+    # ``notes: str | None`` — anyOf preserved; no sibling type injected.
+    assert "anyOf" in properties["notes"]
+    assert "type" not in properties["notes"]
 
     if "items" in properties:
         item_props = properties["items"]["items"]["properties"]
         assert "total" in item_props
+
+
+def test_anyof_union_preserved_in_input_schema():
+    """``T | U`` body fields keep their anyOf — no sibling ``type`` injected."""
+    from fastapi import FastAPI
+    from fastapi.openapi.utils import get_openapi
+    from pydantic import BaseModel, Field
+
+    from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
+
+    class SaveBody(BaseModel):
+        tags: dict[str, list[str]] | list[str] = Field(default_factory=dict)
+
+    app = FastAPI()
+
+    @app.post("/save", operation_id="save")
+    def save(body: SaveBody) -> dict:
+        return {"ok": True}
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        openapi_version=app.openapi_version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+    tags_prop = next(t for t in tools if t.name == "save").inputSchema["properties"]["tags"]
+
+    assert "anyOf" in tags_prop
+    assert "type" not in tags_prop
+
+
+def test_oneof_and_allof_preserved_in_input_schema():
+    """``oneOf`` / ``allOf`` body fields survive without a top-level ``type``."""
+    from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
+
+    openapi_schema = {
+        "openapi": "3.1.0",
+        "info": {"title": "test", "version": "1.0.0"},
+        "paths": {
+            "/save": {
+                "post": {
+                    "operationId": "save",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "kind_a": {"oneOf": [{"type": "string"}, {"type": "integer"}]},
+                                        "kind_b": {
+                                            "allOf": [
+                                                {"$ref": "#/components/schemas/Base"},
+                                                {"type": "object", "properties": {"x": {"type": "integer"}}},
+                                            ]
+                                        },
+                                    },
+                                }
+                            }
+                        },
+                    },
+                    "responses": {"200": {"description": "OK"}},
+                }
+            }
+        },
+        "components": {"schemas": {"Base": {"type": "object", "properties": {"y": {"type": "string"}}}}},
+    }
+
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+    props = next(t for t in tools if t.name == "save").inputSchema["properties"]
+
+    assert "oneOf" in props["kind_a"]
+    assert "type" not in props["kind_a"]
+    assert "allOf" in props["kind_b"]
+    assert isinstance(props["kind_b"]["allOf"], list)
