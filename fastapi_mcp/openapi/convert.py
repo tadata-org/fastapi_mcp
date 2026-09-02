@@ -6,6 +6,7 @@ import mcp.types as types
 
 from .utils import (
     clean_schema_for_display,
+    collapse_nullable_union,
     generate_example_from_schema,
     resolve_schema_references,
     get_single_param_type_from_schema,
@@ -198,7 +199,7 @@ def convert_openapi_to_mcp_tools(
 
             # Add path parameters to properties
             for param_name, param in path_params:
-                param_schema = param.get("schema", {})
+                param_schema = collapse_nullable_union(param.get("schema", {}))
                 param_desc = param.get("description", "")
                 param_required = param.get("required", True)  # Path params are usually required
 
@@ -215,7 +216,7 @@ def convert_openapi_to_mcp_tools(
 
             # Add query parameters to properties
             for param_name, param in query_params:
-                param_schema = param.get("schema", {})
+                param_schema = collapse_nullable_union(param.get("schema", {}))
                 param_desc = param.get("description", "")
                 param_required = param.get("required", False)
 
@@ -235,7 +236,7 @@ def convert_openapi_to_mcp_tools(
 
             # Add body parameters to properties
             for param_name, param in body_params:
-                param_schema = param.get("schema", {})
+                param_schema = collapse_nullable_union(param.get("schema", {}))
                 param_desc = param.get("description", "")
                 param_required = param.get("required", False)
 

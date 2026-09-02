@@ -1,4 +1,5 @@
 from typing import Any, Dict
+from copy import deepcopy
 
 
 def get_single_param_type_from_schema(param_schema: Dict[str, Any]) -> str:
@@ -14,6 +15,38 @@ def get_single_param_type_from_schema(param_schema: Dict[str, Any]) -> str:
             return next(iter(types))
         return "string"
     return param_schema.get("type", "string")
+
+
+def collapse_nullable_union(schema: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Collapse a nullable ``anyOf`` union to its single non-null variant.
+
+    Pydantic v2 renders ``Optional[List[X]]`` as
+    ``{"anyOf": [{"type": "array", "items": {...}}, {"type": "null"}]}``.
+    Projecting that shape into an MCP tool inputSchema by bolting on a bare
+    ``"type": "array"`` (from {@link get_single_param_type_from_schema})
+    produces ``{type: "array"}`` without ``items``, which is invalid JSON
+    Schema and makes MCP clients reject the tool with
+    ``tool parameters array type must have items``.
+
+    This returns a copy of the non-null variant with top-level metadata
+    (``title``, ``description``, ``default``) carried over. Schemas that are
+    not a single-non-null-variant union are returned unchanged.
+
+    See https://github.com/tadata-org/fastapi_mcp/issues/304.
+    """
+    if "anyOf" not in schema:
+        return schema
+    non_null_variants = [
+        variant for variant in schema["anyOf"] if isinstance(variant, dict) and variant.get("type") != "null"
+    ]
+    if len(non_null_variants) != 1:
+        return schema
+    collapsed = deepcopy(non_null_variants[0])
+    for key in ("title", "description", "default"):
+        if key in schema and key not in collapsed:
+            collapsed[key] = schema[key]
+    return collapsed
 
 
 def resolve_schema_references(schema_part: Dict[str, Any], reference_schema: Dict[str, Any]) -> Dict[str, Any]:
@@ -69,6 +102,27 @@ def clean_schema_for_display(schema: Dict[str, Any]) -> Dict[str, Any]:
     """
     # Make a copy to avoid modifying the input schema
     schema = schema.copy()
+
+    # If this is a nullable union (e.g. Optional[List[X]] produced by Pydantic v2
+    # as anyOf: [{type: array, items: ...}, {type: null}]), hoist the non-null
+    # variant's type and items to the top level BEFORE stripping anyOf. Without
+    # this, the projected schema keeps type: "array" but loses its items field,
+    # which is invalid JSON Schema and makes MCP clients reject the tool
+    # (https://github.com/tadata-org/fastapi_mcp/issues/304).
+    if "anyOf" in schema:
+        non_null_variants = [
+            variant for variant in schema["anyOf"] if isinstance(variant, dict) and variant.get("type") != "null"
+        ]
+        if len(non_null_variants) == 1:
+            variant = non_null_variants[0]
+            if "type" in variant:
+                schema.setdefault("type", variant["type"])
+            if "items" in variant:
+                schema.setdefault("items", variant["items"])
+            if "enum" in variant:
+                schema.setdefault("enum", variant["enum"])
+            if "format" in variant:
+                schema.setdefault("format", variant["format"])
 
     # Remove common internal fields that are not helpful for LLMs
     fields_to_remove = [

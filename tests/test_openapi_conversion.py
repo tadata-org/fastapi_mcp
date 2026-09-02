@@ -1,5 +1,8 @@
+from typing import Optional, List
+
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
+from pydantic import BaseModel
 import mcp.types as types
 
 from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
@@ -422,3 +425,99 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     if "items" in properties:
         item_props = properties["items"]["items"]["properties"]
         assert "total" in item_props
+
+
+def test_nullable_union_collapses_to_valid_schema():
+    """Regression test for issue #304.
+
+    Pydantic v2 renders ``Optional[List[X]]`` as ``anyOf: [{type: array, items: ...}, {type: null}]``.
+    Projecting that into a tool inputSchema by bolting on a bare ``type: "array"``
+    (or stripping ``anyOf`` without hoisting ``items``) produces
+    ``{type: "array"}`` with no ``items`` — invalid JSON Schema that MCP
+    clients reject with ``tool parameters array type must have items``.
+    """
+
+    class TagModel(BaseModel):
+        name: str
+        value: str
+
+    class BodyWithOptionalListStr(BaseModel):
+        tags: Optional[List[str]] = None
+
+    class BodyWithOptionalListModels(BaseModel):
+        images: Optional[List[TagModel]] = None
+
+    class BodyWithOptionalScalar(BaseModel):
+        count: Optional[int] = None
+
+    app = FastAPI()
+
+    @app.post("/list-str")
+    def list_str(body: BodyWithOptionalListStr):
+        return {"ok": True}
+
+    @app.post("/list-models")
+    def list_models(body: BodyWithOptionalListModels):
+        return {"ok": True}
+
+    @app.post("/optional-scalar")
+    def optional_scalar(body: BodyWithOptionalScalar):
+        return {"ok": True}
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        openapi_version=app.openapi_version,
+        description=app.description,
+        routes=app.routes,
+    )
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+    tools_by_name = {tool.name: tool for tool in tools}
+
+    # Optional[List[str]]: array property must keep its items
+    tags = tools_by_name["list_str_list_str_post"].inputSchema["properties"]["tags"]
+    assert tags["type"] == "array"
+    assert tags["items"] == {"type": "string"}
+
+    # Optional[List[Model]]: object-array items must survive (with their own schema)
+    images = tools_by_name["list_models_list_models_post"].inputSchema["properties"]["images"]
+    assert images["type"] == "array"
+    assert images["items"]["type"] == "object"
+    assert set(images["items"]["properties"].keys()) == {"name", "value"}
+
+    # Optional scalar: same collapse applies, no anyOf left behind
+    count = tools_by_name["optional_scalar_optional_scalar_post"].inputSchema["properties"]["count"]
+    assert count["type"] == "integer"
+    assert "anyOf" not in count
+
+    # No projected property may keep the invalid anyOf+type combo
+    for tool in tools:
+        for prop in tool.inputSchema["properties"].values():
+            if prop.get("type") == "array":
+                assert "items" in prop, f"array property without items in {tool.name}"
+
+
+def test_clean_schema_for_display_hoists_items_from_nullable_union():
+    """clean_schema_for_display() must not emit {type: array} without items (#304)."""
+
+    schema = {
+        "anyOf": [
+            {"type": "array", "items": {"type": "object", "properties": {"a": {"type": "string"}}}},
+            {"type": "null"},
+        ],
+        "title": "images",
+    }
+
+    cleaned = clean_schema_for_display(schema)
+
+    assert cleaned["type"] == "array"
+    assert cleaned["items"]["type"] == "object"
+    assert "anyOf" not in cleaned
+
+    # Scalar nullable union: type survives the collapse
+    scalar = clean_schema_for_display({"anyOf": [{"type": "integer"}, {"type": "null"}]})
+    assert scalar["type"] == "integer"
+
+    # Multi-variant (non-nullable) unions are unchanged apart from the anyOf strip
+    multi = clean_schema_for_display({"anyOf": [{"type": "string"}, {"type": "integer"}]})
+    assert "anyOf" not in multi
