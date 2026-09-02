@@ -507,6 +507,23 @@ class FastApiMCP:
         parameters: List[Dict[str, Any]] = operation.get("parameters", [])
         arguments = arguments.copy() if arguments else {}  # Deep copy arguments to avoid mutating the original
 
+        # Rebuild the request body from the argument names recorded as body
+        # fields at conversion time. This is done BEFORE consuming path/query/
+        # header parameters below, so a body field whose name collides with a
+        # routing parameter still reaches the body payload instead of being
+        # popped away (https://github.com/tadata-org/fastapi_mcp/issues/319).
+        # Operation maps without the metadata (hand-constructed or produced by
+        # older versions) keep the historical leftover-arguments behavior.
+        body_param_names: Optional[List[str]] = operation.get("body_param_names")
+        raw_body_argument: Optional[str] = operation.get("raw_body_argument")
+
+        body: Optional[Any] = None
+        if body_param_names is not None:
+            if raw_body_argument is not None:
+                body = arguments.get(raw_body_argument)
+            else:
+                body = {name: arguments[name] for name in body_param_names if name in arguments} or None
+
         for param in parameters:
             if param.get("in") == "path" and param.get("name") in arguments:
                 param_name = param.get("name", None)
@@ -537,7 +554,10 @@ class FastApiMCP:
                 if name.lower() in self._forward_headers:
                     headers[name] = value
 
-        body = arguments if arguments else None
+        if body_param_names is None:
+            # Legacy operation map without body metadata: whatever remains
+            # after the routing parameters have been consumed is the body.
+            body = arguments if arguments else None
 
         try:
             logger.debug(f"Making {method.upper()} request to {path}")

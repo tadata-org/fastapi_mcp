@@ -10,6 +10,7 @@ from .fixtures.types import *  # noqa: F403
 from .fixtures.example_data import *  # noqa: F403
 from .fixtures.simple_app import *  # noqa: F403
 from .fixtures.complex_app import *  # noqa: F403
+from .fixtures.issue319_apps import *  # noqa: F403
 
 
 @pytest.hookimpl(trylast=True)

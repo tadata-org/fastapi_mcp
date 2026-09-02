@@ -422,3 +422,58 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     if "items" in properties:
         item_props = properties["items"]["items"]["properties"]
         assert "total" in item_props
+
+
+def test_non_object_request_body_becomes_single_payload_argument(simple_fastapi_app_with_array_body: FastAPI):
+    """Regression test for issue #319 (part 1): a top-level array request body
+    must be exposed as a single `payload` argument instead of being dropped."""
+    openapi_schema = get_openapi(
+        title=simple_fastapi_app_with_array_body.title,
+        version=simple_fastapi_app_with_array_body.version,
+        openapi_version=simple_fastapi_app_with_array_body.openapi_version,
+        description=simple_fastapi_app_with_array_body.description,
+        routes=simple_fastapi_app_with_array_body.routes,
+    )
+
+    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
+
+    bulk_tool = next(tool for tool in tools if tool.name == "bulk_tags")
+    properties = bulk_tool.inputSchema["properties"]
+
+    assert "payload" in properties
+    assert properties["payload"]["type"] == "array"
+    assert properties["payload"]["items"]["type"] == "object"
+    assert "payload" in bulk_tool.inputSchema.get("required", [])
+
+    operation = operation_map["bulk_tags"]
+    assert operation["body_param_names"] == ["payload"]
+    assert operation["raw_body_argument"] == "payload"
+
+
+def test_body_path_param_collision_records_metadata(simple_fastapi_app_with_body_path_collision: FastAPI):
+    """Regression test for issue #319 (part 2): when a body field name collides
+    with a path parameter, the route parameter keeps the inputSchema slot, the
+    body fields are still recorded for execution, and no schema information is
+    silently lost."""
+    openapi_schema = get_openapi(
+        title=simple_fastapi_app_with_body_path_collision.title,
+        version=simple_fastapi_app_with_body_path_collision.version,
+        openapi_version=simple_fastapi_app_with_body_path_collision.openapi_version,
+        description=simple_fastapi_app_with_body_path_collision.description,
+        routes=simple_fastapi_app_with_body_path_collision.routes,
+    )
+
+    tools, operation_map = convert_openapi_to_mcp_tools(openapi_schema)
+
+    tool = next(tool for tool in tools if tool.name == "update_order")
+    properties = tool.inputSchema["properties"]
+
+    # The path parameter's schema wins the slot...
+    assert "item_id" in properties
+    assert properties["item_id"]["type"] == "integer"
+    # ...the non-colliding body field is present...
+    assert "quantity" in properties
+    assert properties["quantity"]["type"] == "integer"
+    # ...and the executor metadata records both body fields.
+    assert sorted(operation_map["update_order"]["body_param_names"]) == ["item_id", "quantity"]
+    assert operation_map["update_order"]["raw_body_argument"] is None

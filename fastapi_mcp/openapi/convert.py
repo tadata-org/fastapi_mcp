@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import mcp.types as types
 
@@ -59,7 +59,6 @@ def convert_openapi_to_mcp_tools(
                 "parameters": operation.get("parameters", []),
                 "request_body": operation.get("requestBody", {}),
             }
-
             summary = operation.get("summary", "")
             description = operation.get("description", "")
 
@@ -173,6 +172,15 @@ def convert_openapi_to_mcp_tools(
                     header_params.append((param_name, param))
 
             # Process request body if present
+            #
+            # Record which argument names belong to the request body so the
+            # executor can rebuild the payload without confusing it with
+            # path/query/header parameters of the same name (#319). For
+            # non-object bodies (a top-level array or a primitive, e.g. from a
+            # Pydantic __root__ model) the flattened-properties strategy is
+            # impossible — the whole body is mapped to a single argument.
+            body_param_names: List[str] = []
+            raw_body_argument: Optional[str] = None
             request_body = operation.get("requestBody", {})
             if request_body and "content" in request_body:
                 content_type = next(iter(request_body["content"]), None)
@@ -191,6 +199,43 @@ def convert_openapi_to_mcp_tools(
                                     },
                                 )
                             )
+                            body_param_names.append(prop_name)
+                    else:
+                        route_param_names = (
+                            {name for name, _ in path_params}
+                            | {name for name, _ in query_params}
+                            | {name for name, _ in header_params}
+                        )
+                        raw_argument = next(
+                            (
+                                candidate
+                                for candidate in ("payload", "requestBody")
+                                if candidate not in route_param_names
+                            ),
+                            None,
+                        )
+                        if raw_argument is None:
+                            logger.warning(
+                                f"Operation {operation_id}: could not find a free argument name for the "
+                                f"non-object request body; the body will not be exposed to the tool"
+                            )
+                        else:
+                            required = request_body.get("required", False)
+                            body_params.append(
+                                (
+                                    raw_argument,
+                                    {
+                                        "name": raw_argument,
+                                        "schema": schema,
+                                        "required": required,
+                                        "description": request_body.get("description", ""),
+                                    },
+                                )
+                            )
+                            body_param_names.append(raw_argument)
+                            raw_body_argument = raw_argument
+            operation_map[operation_id]["body_param_names"] = body_param_names
+            operation_map[operation_id]["raw_body_argument"] = raw_body_argument
 
             # Create input schema properties for all parameters
             properties = {}
@@ -238,6 +283,18 @@ def convert_openapi_to_mcp_tools(
                 param_schema = param.get("schema", {})
                 param_desc = param.get("description", "")
                 param_required = param.get("required", False)
+
+                if param_name in properties:
+                    # A path/query/header parameter already owns this name in
+                    # the flattened inputSchema. The route parameter's schema
+                    # wins; the executor still sends the value to the body, but
+                    # the LLM cannot express the two independently.
+                    logger.warning(
+                        f"Operation {operation_id}: request body field '{param_name}' collides with a "
+                        f"path/query/header parameter of the same name; the tool inputSchema keeps the "
+                        f"route parameter's schema and the value is passed to both"
+                    )
+                    continue
 
                 properties[param_name] = param_schema.copy()
                 properties[param_name]["title"] = param_name
