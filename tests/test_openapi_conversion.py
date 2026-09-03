@@ -502,3 +502,28 @@ def test_oneof_body_schema_not_collapsed():
 
     assert "oneOf" in value_prop
     assert "type" not in value_prop
+
+
+def test_union_path_param_not_collapsed():
+    """Path params with union types (e.g. int | str) must keep anyOf too —
+    the path-param loop previously injected a bogus "type": "string"."""
+    app = FastAPI()
+
+    @app.get("/items/{item_id}", operation_id="get_item")
+    def get_item(item_id: Union[int, str]):
+        return {"id": item_id}
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        openapi_version=app.openapi_version,
+        routes=app.routes,
+    )
+
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+
+    tool = next(t for t in tools if t.name == "get_item")
+    prop = tool.inputSchema["properties"]["item_id"]
+
+    assert "anyOf" in prop
+    assert "type" not in prop
