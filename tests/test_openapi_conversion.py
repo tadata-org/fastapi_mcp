@@ -461,3 +461,44 @@ def test_union_type_schema_not_collapsed():
     variant_types = {v.get("type") for v in tags_prop["anyOf"]}
     assert "object" in variant_types
     assert "array" in variant_types
+
+
+def test_oneof_body_schema_not_collapsed():
+    """Same as above but for a hand-written OpenAPI spec using oneOf instead of anyOf."""
+    openapi_schema = {
+        "openapi": "3.1.0",
+        "info": {"title": "t", "version": "1"},
+        "paths": {
+            "/save": {
+                "post": {
+                    "operationId": "save",
+                    "requestBody": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "value": {
+                                            "oneOf": [
+                                                {"type": "object"},
+                                                {"type": "array"},
+                                            ]
+                                        }
+                                    },
+                                }
+                            }
+                        }
+                    },
+                    "responses": {"200": {"description": "ok"}},
+                }
+            }
+        },
+    }
+
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+
+    save_tool = next(tool for tool in tools if tool.name == "save")
+    value_prop = save_tool.inputSchema["properties"]["value"]
+
+    assert "oneOf" in value_prop
+    assert "type" not in value_prop
