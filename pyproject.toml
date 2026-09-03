@@ -27,16 +27,15 @@ classifiers = [
 keywords = ["fastapi", "openapi", "mcp", "llm", "claude", "ai", "tools", "api", "conversion", "modelcontextprotocol"]
 dependencies = [
     "fastapi>=0.100.0",
-    "typer>=0.9.0",
-    "rich>=13.0.0",
     "mcp>=1.12.0",
     "pydantic>=2.0.0",
-    "pydantic-settings>=2.5.2",
-    "uvicorn>=0.20.0",
     "httpx>=0.24.0",
-    "requests>=2.25.0",
-    "tomli>=2.2.1",
 ]
+
+[project.optional-dependencies]
+# Needed to run the generated MCP server behind a real HTTP server
+# (uvicorn is used by the examples in examples/ and by the real-transport tests).
+deploy = ["uvicorn>=0.20.0"]
 
 [dependency-groups]
 dev = [
@@ -50,6 +49,7 @@ dev = [
     "pyjwt>=2.10.1",
     "cryptography>=44.0.2",
     "types-jsonschema>=4.25.0.20250720",
+    "uvicorn>=0.20.0",
 ]
 
 [project.urls]
