@@ -1,5 +1,8 @@
+from typing import Dict, List, Union
+
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
+from pydantic import BaseModel, Field
 import mcp.types as types
 
 from fastapi_mcp.openapi.convert import convert_openapi_to_mcp_tools
@@ -422,3 +425,39 @@ def test_body_params_edge_cases(complex_fastapi_app: FastAPI):
     if "items" in properties:
         item_props = properties["items"]["items"]["properties"]
         assert "total" in item_props
+
+
+def test_union_type_schema_not_collapsed():
+    """A body field typed as a union of two real types (e.g. dict | list) must keep its
+    anyOf in the projected MCP tool schema.
+
+    Injecting a single arbitrary "type" alongside anyOf makes the MCP server's jsonschema
+    validator reject every variant except the one picked (issue #307).
+    """
+
+    app = FastAPI()
+
+    class SaveRequest(BaseModel):
+        tags: Union[Dict[str, List[str]], List[str]] = Field(default_factory=dict)
+
+    @app.post("/save", operation_id="save")
+    def save(body: SaveRequest):
+        return {"ok": True}
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        openapi_version=app.openapi_version,
+        routes=app.routes,
+    )
+
+    tools, _ = convert_openapi_to_mcp_tools(openapi_schema)
+
+    save_tool = next(tool for tool in tools if tool.name == "save")
+    tags_prop = save_tool.inputSchema["properties"]["tags"]
+
+    assert "anyOf" in tags_prop
+    assert "type" not in tags_prop
+    variant_types = {v.get("type") for v in tags_prop["anyOf"]}
+    assert "object" in variant_types
+    assert "array" in variant_types

@@ -225,7 +225,10 @@ def convert_openapi_to_mcp_tools(
                     properties[param_name]["description"] = param_desc
 
                 if "type" not in properties[param_name]:
-                    properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
+                    any_of = param_schema.get("anyOf") or []
+                    non_null_types = {v.get("type") for v in any_of if v.get("type") and v.get("type") != "null"}
+                    if len(non_null_types) <= 1:
+                        properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
 
                 if "default" in param_schema:
                     properties[param_name]["default"] = param_schema["default"]
@@ -245,7 +248,10 @@ def convert_openapi_to_mcp_tools(
                     properties[param_name]["description"] = param_desc
 
                 if "type" not in properties[param_name]:
-                    properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
+                    any_of = param_schema.get("anyOf") or []
+                    non_null_types = {v.get("type") for v in any_of if v.get("type") and v.get("type") != "null"}
+                    if len(non_null_types) <= 1:
+                        properties[param_name]["type"] = get_single_param_type_from_schema(param_schema)
 
                 if "default" in param_schema:
                     properties[param_name]["default"] = param_schema["default"]
