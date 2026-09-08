@@ -41,6 +41,21 @@ def test_custom_configuration(simple_fastapi_app: FastAPI):
     assert mcp_server._describe_full_response_schema is True
 
 
+def test_description_is_not_passed_as_mcp_version(simple_fastapi_app: FastAPI):
+    """Description must not bind to MCP Server.version (issues #293, #322)."""
+    custom_description = "MCP Server Description"
+    mcp = FastApiMCP(
+        simple_fastapi_app,
+        name="MCP Server",
+        description=custom_description,
+    )
+
+    lowlevel = mcp.server
+    assert lowlevel.version != custom_description
+    assert lowlevel.version == simple_fastapi_app.version
+    assert lowlevel.instructions == custom_description
+
+
 def test_describe_all_responses_config_simple_app(simple_fastapi_app: FastAPI):
     """Test the describe_all_responses behavior with the simple app."""
     mcp_default = FastApiMCP(

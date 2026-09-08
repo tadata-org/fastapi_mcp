@@ -1,5 +1,6 @@
 import json
 import httpx
+import inspect
 from typing import Dict, Optional, Any, List, Union, Literal, Sequence
 from typing_extensions import Annotated, Doc
 
@@ -141,7 +142,16 @@ class FastApiMCP:
         # Filter tools based on operation IDs and tags
         self.tools = self._filter_tools(all_tools, openapi_schema)
 
-        mcp_server: Server = Server(self.name, self.description)
+        # mcp>=1.12: second positional is `version`, not description (#293, #322).
+        # Prefer keyword args so description maps to instructions/description and
+        # FastAPI's app version fills the MCP server version field.
+        server_kwargs: Dict[str, Any] = {"version": self.fastapi.version or ""}
+        server_params = inspect.signature(Server.__init__).parameters
+        if "instructions" in server_params:
+            server_kwargs["instructions"] = self.description
+        if "description" in server_params:
+            server_kwargs["description"] = self.description
+        mcp_server: Server = Server(self.name, **server_kwargs)
 
         @mcp_server.list_tools()
         async def handle_list_tools() -> List[types.Tool]:
