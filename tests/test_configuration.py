@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 import pytest
 
@@ -581,3 +583,31 @@ def test_filtering_with_empty_tags_array():
     exclude_tags_mcp = FastApiMCP(app, exclude_tags=["items"])
     assert len(exclude_tags_mcp.tools) == 1
     assert {tool.name for tool in exclude_tags_mcp.tools} == {"empty_tags"}
+
+
+def test_warns_when_mounted_without_auth_config(simple_fastapi_app: FastAPI, caplog: pytest.LogCaptureFixture):
+    """Mounting without an auth_config should warn that the MCP endpoint is unauthenticated (see #324)."""
+    mcp_server = FastApiMCP(simple_fastapi_app)
+
+    with caplog.at_level(logging.WARNING, logger="fastapi_mcp.server"):
+        mcp_server.mount_http()
+
+    assert any("without authentication" in record.message for record in caplog.records)
+
+
+def test_no_auth_warning_when_auth_config_provided(simple_fastapi_app: FastAPI, caplog: pytest.LogCaptureFixture):
+    """Mounting with an auth_config should not warn about missing authentication."""
+    from fastapi import Depends
+    from fastapi.security import HTTPBearer
+
+    from fastapi_mcp import AuthConfig
+
+    mcp_server = FastApiMCP(
+        simple_fastapi_app,
+        auth_config=AuthConfig(dependencies=[Depends(HTTPBearer())]),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="fastapi_mcp.server"):
+        mcp_server.mount_http()
+
+    assert not any("without authentication" in record.message for record in caplog.records)

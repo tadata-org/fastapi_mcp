@@ -9,6 +9,10 @@ It also supports the full OAuth 2 flow, compliant with [MCP Spec 2025-03-26](htt
 
 It's worth noting that most MCP clients currently do not support the latest MCP spec, so for our examples we might use a bridge client such as `npx mcp-remote`. We recommend you use it as well, and we'll show our examples using it.
 
+<Warning>
+`auth_config` is entirely opt-in. If you don't pass one to `FastApiMCP(...)`, no authentication or authorization is applied to the MCP endpoint — anyone who can reach it can list and call every tool it exposes, the same way an unprotected FastAPI route is open to anyone who can reach it. This is fine for local development or fully internal/trusted networks, but make sure to configure `auth_config` before exposing an MCP server publicly.
+</Warning>
+
 ## Basic Token Passthrough
 
 If you just want to be able to pass a valid authorization header, without supporting a full authentication flow, you don't need to do anything special.
