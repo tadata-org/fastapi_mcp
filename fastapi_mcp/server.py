@@ -307,7 +307,11 @@ class FastApiMCP:
                     f"Unsupported MCP spec version: {self._auth_config.version}. Please check your AuthConfig."
                 )
         else:
-            logger.info("No auth config provided, skipping auth setup")
+            logger.warning(
+                "No auth_config provided: MCP tools will be exposed without authentication. "
+                "Anyone who can reach this server's MCP endpoint can call every wrapped route. "
+                "Pass an AuthConfig if this server is not intended to be publicly/anonymously accessible."
+            )
 
     def mount_http(
         self,
