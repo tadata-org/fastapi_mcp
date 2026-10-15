@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling", "tomli"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61", "setuptools_scm[toml]>=8", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "fastapi-mcp"
-version = "0.4.0"
+dynamic = ["version"]
 description = "Automatic MCP server generator for FastAPI applications - converts FastAPI endpoints to MCP tools for LLM integration"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -60,8 +60,10 @@ Documentation = "https://github.com/tadata-org/fastapi_mcp#readme"
 "Source Code" = "https://github.com/tadata-org/fastapi_mcp"
 "Changelog" = "https://github.com/tadata-org/fastapi_mcp/blob/main/CHANGELOG.md"
 
-[tool.hatch.build.targets.wheel]
-packages = ["fastapi_mcp"]
+[tool.setuptools.packages.find]
+include = ["fastapi_mcp*"]
+
+[tool.setuptools_scm]
 
 [tool.ruff]
 line-length = 120
