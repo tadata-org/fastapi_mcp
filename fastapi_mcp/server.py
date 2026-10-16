@@ -1,4 +1,5 @@
 import json
+from urllib.parse import quote
 import httpx
 from typing import Dict, Optional, Any, List, Union, Literal, Sequence
 from typing_extensions import Annotated, Doc
@@ -512,7 +513,11 @@ class FastApiMCP:
                 param_name = param.get("name", None)
                 if param_name is None:
                     raise ValueError(f"Parameter name is None for parameter: {param}")
-                path = path.replace(f"{{{param_name}}}", str(arguments.pop(param_name)))
+                value = quote(str(arguments.pop(param_name)), safe="")
+                # quote() leaves dots unescaped, but HTTP clients normalize dot segments.
+                if value in (".", ".."):
+                    value = value.replace(".", "%2E")
+                path = path.replace(f"{{{param_name}}}", value)
 
         query = {}
         for param in parameters:
