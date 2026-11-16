@@ -80,6 +80,16 @@ mcp.mount()
 
 That's it! Your auto-generated MCP server is now available at `https://app.base.url/mcp`.
 
+### JSON request bodies
+
+JSON bodies with named properties keep their existing flattened tool arguments.
+For an array, scalar or free-form JSON body, the tool exposes the complete body
+under `payload`: an endpoint accepting `list[int]` receives MCP arguments such as
+`{"payload": [1, 2]}` and the HTTP body `[1, 2]`. If a path, query or header
+parameter already uses that name, the body argument is `payload_1`, `payload_2`,
+and so on; consult the generated tool schema. An optional body may be omitted.
+An explicit `null`, `false`, zero or empty value is preserved.
+
 ## Documentation, Examples and Advanced Usage
 
 FastAPI-MCP provides [comprehensive documentation](https://fastapi-mcp.tadata.com/). Additionaly, check out the [examples directory](examples) for code samples demonstrating these features in action.
