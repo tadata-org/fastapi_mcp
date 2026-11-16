@@ -159,6 +159,8 @@ def convert_openapi_to_mcp_tools(
             query_params = []
             header_params = []
             body_params = []
+            raw_body_argument = None
+            raw_body_schema = None
 
             for param in operation.get("parameters", []):
                 param_name = param.get("name")
@@ -191,6 +193,16 @@ def convert_openapi_to_mcp_tools(
                                     },
                                 )
                             )
+                    elif content_type == "application/json":
+                        # MCP arguments must be an object, even when the HTTP body is not.
+                        names = {param.get("name") for param in operation.get("parameters", [])}
+                        raw_body_argument = "payload"
+                        suffix = 1
+                        while raw_body_argument in names:
+                            raw_body_argument = f"payload_{suffix}"
+                            suffix += 1
+                        raw_body_schema = schema
+                        operation_map[operation_id]["raw_body_argument"] = raw_body_argument
 
             # Create input schema properties for all parameters
             properties = {}
@@ -252,6 +264,11 @@ def convert_openapi_to_mcp_tools(
 
                 if param_required:
                     required_props.append(param_name)
+
+            if raw_body_argument is not None:
+                properties[raw_body_argument] = raw_body_schema
+                if request_body.get("required", False):
+                    required_props.append(raw_body_argument)
 
             # Create a proper input schema for the tool
             input_schema = {"type": "object", "properties": properties, "title": f"{operation_id}Arguments"}

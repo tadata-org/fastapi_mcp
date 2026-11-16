@@ -537,11 +537,16 @@ class FastApiMCP:
                 if name.lower() in self._forward_headers:
                     headers[name] = value
 
-        body = arguments if arguments else None
+        raw_body_argument = operation.get("raw_body_argument")
+        json_body_present = raw_body_argument is not None and raw_body_argument in arguments
+        body = arguments.get(raw_body_argument) if raw_body_argument is not None else (arguments if arguments else None)
 
         try:
             logger.debug(f"Making {method.upper()} request to {path}")
-            response = await self._request(client, method, path, query, headers, body)
+            if json_body_present:
+                response = await self._request(client, method, path, query, headers, body, json_body_present=True)
+            else:
+                response = await self._request(client, method, path, query, headers, body)
 
             # TODO: Better typing for the AsyncClientProtocol. It should return a ResponseProtocol that has a json() method that returns a dict/list/etc.
             try:
@@ -577,7 +582,15 @@ class FastApiMCP:
         query: Dict[str, Any],
         headers: Dict[str, str],
         body: Optional[Any],
+        json_body_present: bool = False,
     ) -> Any:
+        if json_body_present and method.lower() in ("get", "post", "put", "patch", "delete"):
+            if body is None:
+                # HTTPX treats json=None as no body; an explicit JSON null is different.
+                json_headers = httpx.Headers(headers)
+                json_headers.setdefault("content-type", "application/json")
+                return await client.request(method, path, params=query, headers=json_headers, content=b"null")
+            return await client.request(method, path, params=query, headers=headers, json=body)
         if method.lower() == "get":
             return await client.get(path, params=query, headers=headers)
         elif method.lower() == "post":
