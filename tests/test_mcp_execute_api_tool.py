@@ -183,10 +183,46 @@ async def test_execute_api_tool_with_non_ascii_chars(simple_fastapi_app: FastAPI
     assert "World" in response_text  # ASCII characters preserved
     assert "标签2" in response_text  # Chinese characters in tags preserved
     assert "这是一个测试描述" in response_text  # All Chinese description preserved
-    
+
     # Verify the HTTP client was called correctly
     mock_client.get.assert_called_once_with(
         "/items/1",
+        params={},
+        headers={}
+    )
+
+
+@pytest.mark.asyncio
+async def test_execute_api_tool_encodes_path_parameter_values(simple_fastapi_app: FastAPI):
+    """Test that path parameter values are URL-encoded.
+
+    Regression test for https://github.com/tadata-org/fastapi_mcp/issues/354:
+    raw path values containing '/', '?' or '..' must not change the routed endpoint.
+    """
+    mcp = FastApiMCP(simple_fastapi_app)
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"id": 1, "name": "Item 1"}
+    mock_response.status_code = 200
+    mock_response.text = '{"id": 1, "name": "Item 1"}'
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+
+    tool_name = "get_item"
+    arguments = {"item_id": "../admin"}
+
+    with patch.object(mcp, "_http_client", mock_client):
+        result = await mcp._execute_api_tool(
+            client=mock_client,
+            tool_name=tool_name,
+            arguments=arguments,
+            operation_map=mcp.operation_map,
+        )
+
+    assert len(result) == 1
+    mock_client.get.assert_called_once_with(
+        "/items/..%2Fadmin",
         params={},
         headers={}
     )
